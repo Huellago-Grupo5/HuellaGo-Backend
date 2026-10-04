@@ -2,6 +2,7 @@ package com.huellago.backend.serviceimpl;
 
 import com.huellago.backend.dtos.RetoRespuestaDTO;
 import com.huellago.backend.dtos.UsuarioRetoRespuestaDTO;
+import com.huellago.backend.dtos.ActualizarProgresoDTO;
 import com.huellago.backend.entities.Reto;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.UsuarioReto;
@@ -58,6 +59,42 @@ public class RetoServiceImpl implements RetoService {
         usuarioReto.setFechaAceptacion(LocalDateTime.now());
         usuarioReto.setFechaCompletado(null);
 
+        return convertirARespuesta(usuarioRetoRepository.save(usuarioReto));
+    }
+
+    @Override
+    public List<UsuarioRetoRespuestaDTO> listarRetosActivos(Long usuarioId) {
+        return usuarioRetoRepository
+                .findByUsuario_IdAndEstadoIgnoreCaseOrderByFechaAceptacionDesc(usuarioId, "activo")
+                .stream()
+                .map(this::convertirARespuesta)
+                .toList();
+    }
+
+    @Override
+    public UsuarioRetoRespuestaDTO actualizarProgreso(
+            Integer usuarioRetoId, Long usuarioId, ActualizarProgresoDTO dto) {
+        if (dto == null || dto.getProgreso() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El progreso es obligatorio");
+        }
+        if (dto.getProgreso().compareTo(BigDecimal.ZERO) < 0
+                || dto.getProgreso().compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El progreso debe estar entre 0 y 100");
+        }
+
+        UsuarioReto usuarioReto = usuarioRetoRepository
+                .findByIdAndUsuario_Id(usuarioRetoId, usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Participación no encontrada"));
+
+        if (!"activo".equalsIgnoreCase(usuarioReto.getEstado())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La participación no está activa");
+        }
+
+        usuarioReto.setProgreso(dto.getProgreso());
         return convertirARespuesta(usuarioRetoRepository.save(usuarioReto));
     }
 
