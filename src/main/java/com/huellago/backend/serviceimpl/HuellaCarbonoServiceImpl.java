@@ -24,6 +24,8 @@ import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Service
 public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
@@ -246,6 +248,23 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
                 equivalencia(co2Total, 50),
                 equivalencia(co2Total, 7)
         );
+    }
+
+    @Override
+    public HuellaCarbonoRespuestaDTO obtenerHuellaDiaria(Long usuarioId) {
+        LocalDate hoy = LocalDate.now();
+        LocalDateTime inicio = hoy.atStartOfDay();
+        LocalDateTime fin = hoy.plusDays(1).atStartOfDay();
+
+        HuellaCarbono huellaCarbono = huellaCarbonoRepository
+                .findTopByUsuario_IdAndFechaCalculoBetweenOrderByFechaCalculoDesc(
+                        usuarioId, inicio, fin);
+        if (huellaCarbono == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "No existe una huella de carbono registrada para el día actual");
+        }
+
+        return convertirADTO(huellaCarbono);
     }
 
     private Long equivalencia(BigDecimal co2Total, int factor) {

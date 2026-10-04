@@ -43,6 +43,13 @@ public class HuellaCarbonoController {
                 huellaCarbonoService.obtenerEquivalencias(userSecurity.getUser().getId()));
     }
 
+    @GetMapping("/diario")
+    public ResponseEntity<HuellaCarbonoRespuestaDTO> obtenerHuellaDiaria(
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(
+                huellaCarbonoService.obtenerHuellaDiaria(userSecurity.getUser().getId()));
+    }
+
     @PostMapping("/recalcular")
     public ResponseEntity<HuellaCarbonoRespuestaDTO> recalcular(
             @AuthenticationPrincipal UserSecurity userSecurity) {

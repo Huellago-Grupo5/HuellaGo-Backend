@@ -13,4 +13,5 @@ public interface HuellaCarbonoService {
     public HuellaDesgloseDTO obtenerDesglose(Long usuarioId);
     public List<HuellaCarbonoRespuestaDTO> obtenerHistorial(Long usuarioId);
     public HuellaEquivalenciasDTO obtenerEquivalencias(Long usuarioId);
+    public HuellaCarbonoRespuestaDTO obtenerHuellaDiaria(Long usuarioId);
 }
