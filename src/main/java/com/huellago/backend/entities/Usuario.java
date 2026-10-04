@@ -59,4 +59,9 @@ public class Usuario {
     @ToString.Exclude
     @OneToMany(mappedBy = "usuario", fetch = FetchType.EAGER)
     private List<Notificacion> notificaciones;
+
+    @JsonIgnore
+    @ToString.Exclude
+    @OneToMany(mappedBy = "usuario", fetch = FetchType.EAGER)
+    private List<Sesion> sesiones;
 }

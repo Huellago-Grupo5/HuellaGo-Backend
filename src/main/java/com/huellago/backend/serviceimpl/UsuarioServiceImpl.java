@@ -1,14 +1,21 @@
 package com.huellago.backend.serviceimpl;
 
-import com.huellago.backend.dto.NotificacionesDTO;
-import com.huellago.backend.dto.UsuarioPerfilDTO;
-import com.huellago.backend.dto.UsuarioRegistroDTO;
-import com.huellago.backend.dto.VisibilidadDTO;
+import com.huellago.backend.dtos.UsuarioRegistroDTO;
+import com.huellago.backend.dtos.UsuarioRespuestaDTO;
+import com.huellago.backend.dtos.RecuperarContrasenaDTO;
+import com.huellago.backend.dtos.RestablecerContrasenaDTO;
+import com.huellago.backend.dtos.TokenDTO;
+import com.huellago.backend.dtos.UsuarioPerfilDTO;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.repositories.UsuarioRepository;
-import com.huellago.backend.service.UsuarioService;
+import com.huellago.backend.security.JwtUtilService;
+import com.huellago.backend.security.UserSecurity;
+import com.huellago.backend.services.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 
@@ -16,60 +23,119 @@ import java.time.LocalDateTime;
 public class UsuarioServiceImpl implements UsuarioService {
 
     @Autowired
-    private UsuarioRepository usuarioRepository;
+    UsuarioRepository usuarioRepository;
+
+    @Autowired
+    JwtUtilService jwtUtilService;
+
 
     @Override
-    public Usuario registrar(UsuarioRegistroDTO dto) {
-        if (usuarioRepository.existsByCorreo(dto.getCorreo())) {
-            return null;
+    public UsuarioRespuestaDTO registrar(UsuarioRegistroDTO usuarioRegistroDTO) {
+        if (usuarioRepository.existsByCorreo(usuarioRegistroDTO.getCorreo())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya está registrado");
         }
+
+        LocalDateTime ahora = LocalDateTime.now();
         Usuario usuario = new Usuario();
-        usuario.setNombres(dto.getNombres());
-        usuario.setApellidos(dto.getApellidos());
-        usuario.setCorreo(dto.getCorreo());
-        usuario.setContrasena(dto.getContrasena());
+        usuario.setNombres(usuarioRegistroDTO.getNombres());
+        usuario.setApellidos(usuarioRegistroDTO.getApellidos());
+        usuario.setCorreo(usuarioRegistroDTO.getCorreo());
+        usuario.setContrasena(new BCryptPasswordEncoder().encode(usuarioRegistroDTO.getContrasena()));
         usuario.setEcoPuntos(0);
         usuario.setNivel(1);
         usuario.setNotificacionesActivas(true);
         usuario.setVisibilidadComunidad(true);
-        usuario.setFechaCreacion(LocalDateTime.now());
-        usuario.setFechaActualizacion(LocalDateTime.now());
+        usuario.setFechaCreacion(ahora);
+        usuario.setFechaActualizacion(ahora);
 
-        return usuarioRepository.save(usuario);
+        Usuario usuarioGuardado = usuarioRepository.save(usuario);
+        return new UsuarioRespuestaDTO(
+                usuarioGuardado.getId(),
+                usuarioGuardado.getNombres(),
+                usuarioGuardado.getApellidos(),
+                usuarioGuardado.getCorreo(),
+                usuarioGuardado.getEcoPuntos(),
+                usuarioGuardado.getNivel(),
+                usuarioGuardado.getNotificacionesActivas(),
+                usuarioGuardado.getVisibilidadComunidad(),
+                usuarioGuardado.getFechaCreacion(),
+                usuarioGuardado.getFechaActualizacion()
+        );
     }
 
     @Override
-    public Usuario actualizarPerfil(UsuarioPerfilDTO dto) {
-        Usuario usuario = usuarioRepository.findById(dto.getId()).orElse(null);
-        if (usuario == null) {
-            return null;
-        }
-        usuario.setNombres(dto.getNombres());
-        usuario.setApellidos(dto.getApellidos());
-        usuario.setFechaActualizacion(LocalDateTime.now());
-
-        return usuarioRepository.save(usuario);
+    public Usuario buscarPorCorreo(String correo) {
+        return usuarioRepository.findByCorreo(correo);
     }
 
     @Override
-    public Usuario cambiarPreferenciaNotificaciones(NotificacionesDTO dto) {
-        Usuario usuario = usuarioRepository.findById(dto.getId()).orElse(null);
+    public TokenDTO solicitarRecuperacion(RecuperarContrasenaDTO dto) {
+        Usuario usuario = buscarPorCorreo(dto.getCorreo());
         if (usuario == null) {
-            return null;
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
         }
-        usuario.setNotificacionesActivas(dto.getNotificacionesActivas());
-        usuario.setFechaActualizacion(LocalDateTime.now());
 
-        return usuarioRepository.save(usuario);
+        UserSecurity userSecurity = new UserSecurity(usuario);
+        return new TokenDTO(
+                jwtUtilService.generatePasswordResetToken(userSecurity),
+                usuario.getId(),
+                usuario.getCorreo()
+        );
     }
 
     @Override
-    public Usuario cambiarVisibilidadComunitaria(VisibilidadDTO dto) {
-        Usuario usuario = usuarioRepository.findById(dto.getId()).orElse(null);
-        if (usuario == null) {
-            return null;
+    public void restablecerContrasena(RestablecerContrasenaDTO dto) {
+        if (!jwtUtilService.isPasswordResetToken(dto.getToken())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token de recuperación inválido");
         }
-        usuarioRepository.actualizarVisibilidadNativa(dto.getId(), dto.getVisibilidadComunidad());
-        return usuarioRepository.findById(dto.getId()).orElse(null);
+
+        String correo = jwtUtilService.extractUsername(dto.getToken());
+        Usuario usuario = buscarPorCorreo(correo);
+        if (usuario == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
+        }
+
+        usuario.setContrasena(new BCryptPasswordEncoder().encode(dto.getNuevaContrasena()));
+        usuario.setFechaActualizacion(LocalDateTime.now());
+        usuarioRepository.save(usuario);
     }
+
+    @Override
+    public UsuarioRespuestaDTO actualizarPerfil(String correoAutenticado, UsuarioPerfilDTO dto) {
+        Usuario usuario = buscarPorCorreo(correoAutenticado);
+        if (usuario == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
+        }
+
+        if (dto.getCorreo() != null && !dto.getCorreo().equalsIgnoreCase(usuario.getCorreo())
+                && usuarioRepository.existsByCorreoAndIdNot(dto.getCorreo(), usuario.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya está registrado");
+        }
+
+        if (dto.getNombres() != null) {
+            usuario.setNombres(dto.getNombres());
+        }
+        if (dto.getApellidos() != null) {
+            usuario.setApellidos(dto.getApellidos());
+        }
+        if (dto.getCorreo() != null) {
+            usuario.setCorreo(dto.getCorreo());
+        }
+        usuario.setFechaActualizacion(LocalDateTime.now());
+
+        Usuario usuarioActualizado = usuarioRepository.save(usuario);
+        return new UsuarioRespuestaDTO(
+                usuarioActualizado.getId(),
+                usuarioActualizado.getNombres(),
+                usuarioActualizado.getApellidos(),
+                usuarioActualizado.getCorreo(),
+                usuarioActualizado.getEcoPuntos(),
+                usuarioActualizado.getNivel(),
+                usuarioActualizado.getNotificacionesActivas(),
+                usuarioActualizado.getVisibilidadComunidad(),
+                usuarioActualizado.getFechaCreacion(),
+                usuarioActualizado.getFechaActualizacion()
+        );
+    }
+
 }
