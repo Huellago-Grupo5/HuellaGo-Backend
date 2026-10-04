@@ -3,6 +3,7 @@ package com.huellago.backend.serviceimpl;
 import com.huellago.backend.dtos.HuellaCarbonoRespuestaDTO;
 import com.huellago.backend.dtos.ActividadHuellaDTO;
 import com.huellago.backend.dtos.HuellaDesgloseDTO;
+import com.huellago.backend.dtos.HuellaEquivalenciasDTO;
 import com.huellago.backend.entities.HuellaCarbono;
 import com.huellago.backend.entities.Habito;
 import com.huellago.backend.entities.Usuario;
@@ -22,6 +23,9 @@ import java.math.BigDecimal;
 import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Service
 public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
@@ -86,6 +90,11 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
         huellaCarbono.setFechaCalculo(java.time.LocalDateTime.now());
 
         return convertirADTO(huellaCarbonoRepository.save(huellaCarbono));
+    }
+
+    @Override
+    public HuellaCarbonoRespuestaDTO recalcularHuella(Long usuarioId) {
+        return calcularHuellaInicial(usuarioId);
     }
 
     private BigDecimal calcularTransporte(List<Habito> habitos) {
@@ -212,6 +221,55 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
                 huellaCarbono.getCo2Residuos(),
                 huellaCarbono.getFechaCalculo()
         );
+    }
+
+    @Override
+    public List<HuellaCarbonoRespuestaDTO> obtenerHistorial(Long usuarioId) {
+        return huellaCarbonoRepository.findByUsuario_IdOrderByFechaCalculoDesc(usuarioId)
+                .stream()
+                .map(this::convertirADTO)
+                .toList();
+    }
+
+    @Override
+    public HuellaEquivalenciasDTO obtenerEquivalencias(Long usuarioId) {
+        HuellaCarbono huellaCarbono = huellaCarbonoRepository
+                .findTopByUsuario_IdOrderByFechaCalculoDesc(usuarioId);
+        if (huellaCarbono == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Huella de carbono no encontrada");
+        }
+
+        BigDecimal co2Total = huellaCarbono.getCo2Total();
+        return new HuellaEquivalenciasDTO(
+                huellaCarbono.getUsuario().getId(),
+                co2Total,
+                equivalencia(co2Total, 10),
+                equivalencia(co2Total, 50),
+                equivalencia(co2Total, 7)
+        );
+    }
+
+    @Override
+    public HuellaCarbonoRespuestaDTO obtenerHuellaDiaria(Long usuarioId) {
+        LocalDate hoy = LocalDate.now();
+        LocalDateTime inicio = hoy.atStartOfDay();
+        LocalDateTime fin = hoy.plusDays(1).atStartOfDay();
+
+        HuellaCarbono huellaCarbono = huellaCarbonoRepository
+                .findTopByUsuario_IdAndFechaCalculoBetweenOrderByFechaCalculoDesc(
+                        usuarioId, inicio, fin);
+        if (huellaCarbono == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "No existe una huella de carbono registrada para el día actual");
+        }
+
+        return convertirADTO(huellaCarbono);
+    }
+
+    private Long equivalencia(BigDecimal co2Total, int factor) {
+        return Math.max(1, co2Total.multiply(BigDecimal.valueOf(factor))
+                .setScale(0, RoundingMode.HALF_UP).longValue());
     }
 
     @Override
