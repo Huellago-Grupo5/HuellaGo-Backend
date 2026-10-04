@@ -98,6 +98,30 @@ public class RetoServiceImpl implements RetoService {
         return convertirARespuesta(usuarioRetoRepository.save(usuarioReto));
     }
 
+    @Override
+    public UsuarioRetoRespuestaDTO completarReto(Integer usuarioRetoId, Long usuarioId) {
+        UsuarioReto usuarioReto = usuarioRetoRepository
+                .findByIdAndUsuario_Id(usuarioRetoId, usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Participación no encontrada"));
+
+        if (!"activo".equalsIgnoreCase(usuarioReto.getEstado())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La participación ya está completada o no está activa");
+        }
+
+        if (usuarioReto.getProgreso() == null
+                || usuarioReto.getProgreso().compareTo(BigDecimal.valueOf(100)) < 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "El progreso debe ser 100 para completar el reto");
+        }
+
+        usuarioReto.setEstado("completado");
+        usuarioReto.setProgreso(BigDecimal.valueOf(100));
+        usuarioReto.setFechaCompletado(LocalDateTime.now());
+        return convertirARespuesta(usuarioRetoRepository.save(usuarioReto));
+    }
+
     private UsuarioRetoRespuestaDTO convertirARespuesta(UsuarioReto usuarioReto) {
         return new UsuarioRetoRespuestaDTO(
                 usuarioReto.getId(),
