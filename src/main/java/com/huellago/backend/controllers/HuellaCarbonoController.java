@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
+import java.util.List;
+
 @RestController
 @CrossOrigin("*")
 @RequestMapping("/huella-carbono")
@@ -25,6 +27,13 @@ public class HuellaCarbonoController {
 
     @Autowired
     UsuarioAuthorizationService usuarioAuthorizationService;
+
+    @GetMapping("/historial")
+    public ResponseEntity<List<HuellaCarbonoRespuestaDTO>> obtenerHistorial(
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(
+                huellaCarbonoService.obtenerHistorial(userSecurity.getUser().getId()));
+    }
 
     @PostMapping("/calcular/{usuarioId}")
     public ResponseEntity<HuellaCarbonoRespuestaDTO> calcular(

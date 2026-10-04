@@ -4,9 +4,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import com.huellago.backend.entities.HuellaCarbono;
 
+import java.util.List;
+
 public interface HuellaCarbonoRepository extends JpaRepository<HuellaCarbono, Long> {
 
     public HuellaCarbono findTopByUsuario_IdOrderByFechaCalculoDesc(Long usuarioId);
+
+    public List<HuellaCarbono> findByUsuario_IdOrderByFechaCalculoDesc(Long usuarioId);
 
     @Query("SELECT COUNT(h) FROM HuellaCarbono h WHERE h.usuario.id = :usuarioId")
     public Long contarHuellasUsuario(Long usuarioId);

@@ -215,6 +215,14 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
     }
 
     @Override
+    public List<HuellaCarbonoRespuestaDTO> obtenerHistorial(Long usuarioId) {
+        return huellaCarbonoRepository.findByUsuario_IdOrderByFechaCalculoDesc(usuarioId)
+                .stream()
+                .map(this::convertirADTO)
+                .toList();
+    }
+
+    @Override
     public HuellaDesgloseDTO obtenerDesglose(Long usuarioId) {
         if (!usuarioRepository.existsById(usuarioId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
