@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.util.List;
@@ -39,5 +41,18 @@ public class RetosActivosController {
             @AuthenticationPrincipal UserSecurity userSecurity) {
         return ResponseEntity.ok(retoService.actualizarProgreso(
                 usuarioRetoId, userSecurity.getUser().getId(), actualizarProgresoDTO));
+    }
+
+    @PutMapping("/{id}/completar")
+    public ResponseEntity<UsuarioRetoRespuestaDTO> completarReto(
+            @PathVariable("id") Integer usuarioRetoId,
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(retoService.completarReto(
+                usuarioRetoId, userSecurity.getUser().getId()));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Void> manejarResponseStatusException(ResponseStatusException exception) {
+        return ResponseEntity.status(exception.getStatusCode()).build();
     }
 }

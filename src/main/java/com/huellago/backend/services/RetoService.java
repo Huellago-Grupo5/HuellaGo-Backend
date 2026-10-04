@@ -13,4 +13,5 @@ public interface RetoService {
     List<UsuarioRetoRespuestaDTO> listarRetosActivos(Long usuarioId);
     UsuarioRetoRespuestaDTO actualizarProgreso(Integer usuarioRetoId, Long usuarioId,
                                                 ActualizarProgresoDTO actualizarProgresoDTO);
+    UsuarioRetoRespuestaDTO completarReto(Integer usuarioRetoId, Long usuarioId);
 }
