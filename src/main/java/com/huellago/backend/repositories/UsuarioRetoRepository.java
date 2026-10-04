@@ -6,6 +6,8 @@ import com.huellago.backend.entities.UsuarioReto;
 
 public interface UsuarioRetoRepository extends JpaRepository<UsuarioReto, Integer> {
 
+    boolean existsByUsuario_IdAndReto_Id(Long usuarioId, Integer retoId);
+
     @Query("SELECT COUNT(ur) FROM UsuarioReto ur WHERE ur.usuario.id = :usuarioId AND LOWER(ur.estado) = 'activo'")
     public Long contarRetosActivosUsuario(Long usuarioId);
 
