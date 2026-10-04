@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.huellago.backend.dtos.ActualizarHabitoDTO;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 
 import java.util.List;
 
@@ -52,6 +55,21 @@ public class HabitoController {
         return new ResponseEntity<>(
                 habitoService.registrarAlimentacionResiduos(dto),
                 HttpStatus.CREATED
+        );
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<HabitoRespuestaDTO> actualizarHabito(
+            @PathVariable Long id,
+            @RequestBody ActualizarHabitoDTO dto,
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+
+        return ResponseEntity.ok(
+                habitoService.actualizarHabito(
+                        id,
+                        dto,
+                        userSecurity.getUser().getId()
+                )
         );
     }
 }

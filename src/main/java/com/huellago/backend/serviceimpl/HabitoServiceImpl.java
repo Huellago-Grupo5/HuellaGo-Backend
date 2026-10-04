@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import com.huellago.backend.dtos.ActualizarHabitoDTO;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -83,6 +84,60 @@ public class HabitoServiceImpl implements HabitoService {
                 dto.getReciclas() ? BigDecimal.ONE : BigDecimal.ZERO, "boolean"));
         return respuestas;
     }
+
+
+    @Override
+    public HabitoRespuestaDTO actualizarHabito(Long id, ActualizarHabitoDTO dto, Long usuarioId) {
+
+        validarNoNulo(id, "id");
+        validarNoNulo(dto, "datos");
+        validarNoNulo(usuarioId, "usuarioId");
+
+        Habito habito = habitoRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Hábito no encontrado"
+                ));
+
+        if (!habito.getUsuario().getId().equals(usuarioId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "No tienes permiso para modificar este hábito"
+            );
+        }
+
+        if (dto.getValor() != null) {
+            if (dto.getValor().compareTo(BigDecimal.ZERO) < 0) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "El valor no puede ser negativo"
+                );
+            }
+
+            habito.setValor(dto.getValor());
+        }
+
+        if (dto.getUnidad() != null && !dto.getUnidad().isBlank()) {
+            habito.setUnidad(dto.getUnidad());
+        }
+
+        habito.setFechaActualizacion(LocalDateTime.now());
+
+        Habito actualizado = habitoRepository.save(habito);
+
+        return new HabitoRespuestaDTO(
+                actualizado.getId(),
+                actualizado.getUsuario().getId(),
+                actualizado.getCategoria().getId(),
+                actualizado.getNombre(),
+                actualizado.getValor(),
+                actualizado.getUnidad(),
+                actualizado.getFechaRegistro(),
+                actualizado.getFechaActualizacion()
+        );
+    }
+
+
 
     private Usuario buscarUsuario(Long usuarioId) {
         Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
