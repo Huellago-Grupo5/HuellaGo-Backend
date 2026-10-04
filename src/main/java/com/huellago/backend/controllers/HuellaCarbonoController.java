@@ -43,6 +43,13 @@ public class HuellaCarbonoController {
                 huellaCarbonoService.obtenerEquivalencias(userSecurity.getUser().getId()));
     }
 
+    @PostMapping("/recalcular")
+    public ResponseEntity<HuellaCarbonoRespuestaDTO> recalcular(
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(
+                huellaCarbonoService.recalcularHuella(userSecurity.getUser().getId()));
+    }
+
     @PostMapping("/calcular/{usuarioId}")
     public ResponseEntity<HuellaCarbonoRespuestaDTO> calcular(
             @PathVariable("usuarioId") Long usuarioId,

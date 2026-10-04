@@ -90,6 +90,11 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
         return convertirADTO(huellaCarbonoRepository.save(huellaCarbono));
     }
 
+    @Override
+    public HuellaCarbonoRespuestaDTO recalcularHuella(Long usuarioId) {
+        return calcularHuellaInicial(usuarioId);
+    }
+
     private BigDecimal calcularTransporte(List<Habito> habitos) {
         String medio = valorTexto(requerirHabito(habitos, "medio"));
         BigDecimal kmSemana = valorNumerico(requerirHabito(habitos, "kmSemana"));
