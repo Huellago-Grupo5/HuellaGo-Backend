@@ -2,6 +2,7 @@ package com.huellago.backend.controllers;
 
 import com.huellago.backend.dtos.HuellaCarbonoRespuestaDTO;
 import com.huellago.backend.dtos.HuellaDesgloseDTO;
+import com.huellago.backend.dtos.HuellaEquivalenciasDTO;
 import com.huellago.backend.services.HuellaCarbonoService;
 import com.huellago.backend.security.UserSecurity;
 import com.huellago.backend.security.UsuarioAuthorizationService;
@@ -33,6 +34,13 @@ public class HuellaCarbonoController {
             @AuthenticationPrincipal UserSecurity userSecurity) {
         return ResponseEntity.ok(
                 huellaCarbonoService.obtenerHistorial(userSecurity.getUser().getId()));
+    }
+
+    @GetMapping("/equivalencias")
+    public ResponseEntity<HuellaEquivalenciasDTO> obtenerEquivalencias(
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(
+                huellaCarbonoService.obtenerEquivalencias(userSecurity.getUser().getId()));
     }
 
     @PostMapping("/calcular/{usuarioId}")
