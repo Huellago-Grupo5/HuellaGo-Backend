@@ -8,11 +8,13 @@ import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.UsuarioReto;
 import com.huellago.backend.repositories.RetoRepository;
 import com.huellago.backend.repositories.UsuarioRetoRepository;
+import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.services.RetoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -26,6 +28,9 @@ public class RetoServiceImpl implements RetoService {
 
     @Autowired
     UsuarioRetoRepository usuarioRetoRepository;
+
+    @Autowired
+    UsuarioRepository usuarioRepository;
 
     @Override
     public List<RetoRespuestaDTO> listarRetosActivos() {
@@ -99,6 +104,7 @@ public class RetoServiceImpl implements RetoService {
     }
 
     @Override
+    @Transactional
     public UsuarioRetoRespuestaDTO completarReto(Integer usuarioRetoId, Long usuarioId) {
         UsuarioReto usuarioReto = usuarioRetoRepository
                 .findByIdAndUsuario_Id(usuarioRetoId, usuarioId)
@@ -119,6 +125,14 @@ public class RetoServiceImpl implements RetoService {
         usuarioReto.setEstado("completado");
         usuarioReto.setProgreso(BigDecimal.valueOf(100));
         usuarioReto.setFechaCompletado(LocalDateTime.now());
+
+        int puntosActuales = usuarioReto.getUsuario().getEcoPuntos() == null
+                ? 0 : usuarioReto.getUsuario().getEcoPuntos();
+        int puntosRecompensa = usuarioReto.getReto().getPuntosRecompensa() == null
+                ? 0 : usuarioReto.getReto().getPuntosRecompensa();
+        usuarioReto.getUsuario().setEcoPuntos(puntosActuales + puntosRecompensa);
+        usuarioRepository.save(usuarioReto.getUsuario());
+
         return convertirARespuesta(usuarioRetoRepository.save(usuarioReto));
     }
 
