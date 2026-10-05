@@ -60,7 +60,7 @@ public class HabitoServiceImpl implements HabitoService {
         validarPermitido(dto.getFuente(), Set.of("Electricidad", "Gas", "Solar"), "fuente");
 
         Usuario usuario = buscarUsuario(dto.getUsuarioId());
-        CategoriaHabito categoria = buscarCategoria("Energia");
+        CategoriaHabito categoria = buscarCategoria("Energía");
         List<HabitoRespuestaDTO> respuestas = new ArrayList<>();
         respuestas.add(guardarHabito(usuario, categoria, "vivienda", BigDecimal.ZERO, dto.getVivienda()));
         respuestas.add(guardarHabito(usuario, categoria, "personas", BigDecimal.valueOf(dto.getPersonas()), "personas"));
@@ -76,7 +76,7 @@ public class HabitoServiceImpl implements HabitoService {
         validarNoNulo(dto.getReciclas(), "reciclas");
 
         Usuario usuario = buscarUsuario(dto.getUsuarioId());
-        CategoriaHabito alimentacion = buscarCategoria("Alimentacion");
+        CategoriaHabito alimentacion = buscarCategoria("Alimentación");
         CategoriaHabito residuos = buscarCategoria("Residuos");
         List<HabitoRespuestaDTO> respuestas = new ArrayList<>();
         respuestas.add(guardarHabito(usuario, alimentacion, "tipo", BigDecimal.ZERO, dto.getTipo()));

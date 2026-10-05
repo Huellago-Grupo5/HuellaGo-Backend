@@ -75,8 +75,8 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
                 .collect(Collectors.groupingBy(habito -> habito.getCategoria().getNombre().toLowerCase()));
 
         BigDecimal co2Transporte = calcularTransporte(requerirCategoria(habitosPorCategoria, "transporte"));
-        BigDecimal co2Energia = calcularEnergia(requerirCategoria(habitosPorCategoria, "energia"));
-        BigDecimal co2Alimentacion = calcularAlimentacion(requerirCategoria(habitosPorCategoria, "alimentacion"));
+        BigDecimal co2Energia = calcularEnergia(requerirCategoria(habitosPorCategoria, "energía"));
+        BigDecimal co2Alimentacion = calcularAlimentacion(requerirCategoria(habitosPorCategoria, "alimentación"));
         BigDecimal co2Residuos = calcularResiduos(requerirCategoria(habitosPorCategoria, "residuos"));
         BigDecimal co2Total = co2Transporte.add(co2Energia).add(co2Alimentacion).add(co2Residuos);
 
@@ -286,8 +286,8 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
 
         List<ActividadHuellaDTO> actividades = new ArrayList<>();
         actividades.add(new ActividadHuellaDTO("Transporte", huellaCarbono.getCo2Transporte()));
-        actividades.add(new ActividadHuellaDTO("Energia", huellaCarbono.getCo2Energia()));
-        actividades.add(new ActividadHuellaDTO("Alimentacion", huellaCarbono.getCo2Alimentacion()));
+        actividades.add(new ActividadHuellaDTO("Energía", huellaCarbono.getCo2Energia()));
+        actividades.add(new ActividadHuellaDTO("Alimentación", huellaCarbono.getCo2Alimentacion()));
         actividades.add(new ActividadHuellaDTO("Residuos", huellaCarbono.getCo2Residuos()));
         actividades.sort(Comparator.comparing(ActividadHuellaDTO::getCo2).reversed());
 
