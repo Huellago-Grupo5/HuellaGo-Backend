@@ -4,6 +4,7 @@ import com.huellago.backend.dtos.AlimentacionResiduosDTO;
 import com.huellago.backend.dtos.EnergiaDTO;
 import com.huellago.backend.dtos.HabitoRespuestaDTO;
 import com.huellago.backend.dtos.TransporteDTO;
+import com.huellago.backend.dtos.ActualizarHabitoDTO;
 import com.huellago.backend.entities.CategoriaHabito;
 import com.huellago.backend.entities.Habito;
 import com.huellago.backend.entities.Usuario;
@@ -21,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.Locale;
 
 @Service
 public class HabitoServiceImpl implements HabitoService {
@@ -84,6 +86,27 @@ public class HabitoServiceImpl implements HabitoService {
         return respuestas;
     }
 
+    @Override
+    public HabitoRespuestaDTO actualizar(Long id, Usuario usuario, ActualizarHabitoDTO dto) {
+        if (dto == null || dto.getNombre() == null || dto.getNombre().isBlank()
+                || dto.getValor() == null || dto.getUnidad() == null || dto.getUnidad().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Nombre, valor y unidad son obligatorios");
+        }
+
+        Habito habito = habitoRepository.findByIdAndUsuario_Id(id, usuario.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Hábito no encontrado"));
+
+        validarCompatibilidad(habito, dto);
+        habito.setNombre(dto.getNombre().trim());
+        habito.setValor(dto.getValor());
+        habito.setUnidad(dto.getUnidad().trim());
+        habito.setFechaActualizacion(LocalDateTime.now());
+
+        return convertirADTO(habitoRepository.save(habito));
+    }
+
     private Usuario buscarUsuario(Long usuarioId) {
         Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
         if (usuario == null) {
@@ -113,11 +136,52 @@ public class HabitoServiceImpl implements HabitoService {
         habito.setFechaActualizacion(ahora);
 
         Habito guardado = habitoRepository.save(habito);
+        return convertirADTO(guardado);
+    }
+
+    private HabitoRespuestaDTO convertirADTO(Habito habito) {
         return new HabitoRespuestaDTO(
-                guardado.getId(), guardado.getUsuario().getId(), guardado.getCategoria().getId(),
-                guardado.getNombre(), guardado.getValor(), guardado.getUnidad(),
-                guardado.getFechaRegistro(), guardado.getFechaActualizacion()
+                habito.getId(), habito.getUsuario().getId(), habito.getCategoria().getId(),
+                habito.getNombre(), habito.getValor(), habito.getUnidad(),
+                habito.getFechaRegistro(), habito.getFechaActualizacion()
         );
+    }
+
+    private void validarCompatibilidad(Habito habito, ActualizarHabitoDTO dto) {
+        String categoria = habito.getCategoria().getNombre().toLowerCase(Locale.ROOT);
+        String nombre = dto.getNombre().trim().toLowerCase(Locale.ROOT);
+        BigDecimal valor = dto.getValor();
+
+        Set<String> nombresPermitidos = switch (categoria) {
+            case "transporte" -> Set.of("medio", "kmsemana", "diassemana");
+            case "energia" -> Set.of("vivienda", "personas", "fuente");
+            case "alimentacion" -> Set.of("tipo");
+            case "residuos" -> Set.of("plasticos", "reciclas");
+            default -> Set.of();
+        };
+
+        if (!nombresPermitidos.contains(nombre)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Nombre incompatible con la categoría del hábito");
+        }
+
+        if (Set.of("medio", "vivienda", "fuente", "tipo", "plasticos").contains(nombre)
+                && valor.compareTo(BigDecimal.ZERO) != 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Los hábitos textuales deben tener valor 0");
+        }
+
+        if (Set.of("kmsemana", "diassemana", "personas").contains(nombre)
+                && valor.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El valor debe ser positivo");
+        }
+
+        if ("reciclas".equals(nombre)
+                && !(valor.compareTo(BigDecimal.ZERO) == 0 || valor.compareTo(BigDecimal.ONE) == 0)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El valor de reciclas debe ser 0 o 1");
+        }
     }
 
     private void validarPermitido(String valor, Set<String> permitidos, String campo) {

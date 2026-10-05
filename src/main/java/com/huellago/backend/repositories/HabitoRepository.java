@@ -4,9 +4,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import com.huellago.backend.entities.Habito;
 
+import java.util.Optional;
+
 public interface HabitoRepository extends JpaRepository<Habito, Long> {
 
     public java.util.List<Habito> findByUsuario_Id(Long usuarioId);
+
+    Optional<Habito> findByIdAndUsuario_Id(Long id, Long usuarioId);
 
     public Long countByUsuario_Id(Long usuarioId);
 

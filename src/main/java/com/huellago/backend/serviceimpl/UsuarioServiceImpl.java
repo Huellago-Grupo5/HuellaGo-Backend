@@ -6,10 +6,14 @@ import com.huellago.backend.dtos.RecuperarContrasenaDTO;
 import com.huellago.backend.dtos.RestablecerContrasenaDTO;
 import com.huellago.backend.dtos.TokenDTO;
 import com.huellago.backend.dtos.UsuarioPerfilDTO;
+import com.huellago.backend.dtos.EcoPuntosAccionDTO;
+import com.huellago.backend.dtos.EcoPuntosRespuestaDTO;
+import com.huellago.backend.dtos.NivelRespuestaDTO;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.security.JwtUtilService;
 import com.huellago.backend.security.UserSecurity;
+import com.huellago.backend.services.InsigniaService;
 import com.huellago.backend.services.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -18,15 +22,26 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
+import java.util.Map;
 
 @Service
 public class UsuarioServiceImpl implements UsuarioService {
+
+    private static final Map<String, Integer> PUNTOS_ACCIONES = Map.of(
+            "RECICLAR", 10,
+            "USAR_BICICLETA", 15,
+            "AHORRAR_ENERGIA", 10
+    );
 
     @Autowired
     UsuarioRepository usuarioRepository;
 
     @Autowired
     JwtUtilService jwtUtilService;
+
+    @Autowired
+    InsigniaService insigniaService;
 
 
     @Override
@@ -135,6 +150,55 @@ public class UsuarioServiceImpl implements UsuarioService {
                 usuarioActualizado.getVisibilidadComunidad(),
                 usuarioActualizado.getFechaCreacion(),
                 usuarioActualizado.getFechaActualizacion()
+        );
+    }
+
+    @Override
+    public EcoPuntosRespuestaDTO otorgarEcoPuntos(
+            Usuario usuario, EcoPuntosAccionDTO dto) {
+        if (dto == null || dto.getAccion() == null || dto.getAccion().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La acción es obligatoria");
+        }
+
+        String accion = dto.getAccion().trim().toUpperCase(Locale.ROOT);
+        Integer puntos = PUNTOS_ACCIONES.get(accion);
+        if (puntos == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Acción sostenible no válida");
+        }
+
+        int ecoPuntosActuales = usuario.getEcoPuntos() == null ? 0 : usuario.getEcoPuntos();
+        usuario.setEcoPuntos(ecoPuntosActuales + puntos);
+        Usuario usuarioActualizado = actualizarNivel(usuario);
+        insigniaService.evaluarYDesbloquearInsignias(usuarioActualizado);
+
+        return new EcoPuntosRespuestaDTO(
+                usuarioActualizado.getId(),
+                usuarioActualizado.getEcoPuntos(),
+                puntos,
+                accion
+        );
+    }
+
+    @Override
+    public Usuario actualizarNivel(Usuario usuario) {
+        int ecoPuntos = usuario.getEcoPuntos() == null ? 0 : usuario.getEcoPuntos();
+        usuario.setNivel((ecoPuntos / 100) + 1);
+        return usuarioRepository.save(usuario);
+    }
+
+    @Override
+    public NivelRespuestaDTO obtenerNivel(Usuario usuario) {
+        int ecoPuntos = usuario.getEcoPuntos() == null ? 0 : usuario.getEcoPuntos();
+        int puntosEnNivel = ecoPuntos % 100;
+        return new NivelRespuestaDTO(
+                usuario.getId(),
+                ecoPuntos,
+                (ecoPuntos / 100) + 1,
+                puntosEnNivel,
+                100 - puntosEnNivel,
+                puntosEnNivel
         );
     }
 
