@@ -10,6 +10,8 @@ import com.huellago.backend.repositories.RetoRepository;
 import com.huellago.backend.repositories.UsuarioRetoRepository;
 import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.services.RetoService;
+import com.huellago.backend.services.UsuarioService;
+import com.huellago.backend.services.InsigniaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -30,7 +32,10 @@ public class RetoServiceImpl implements RetoService {
     UsuarioRetoRepository usuarioRetoRepository;
 
     @Autowired
-    UsuarioRepository usuarioRepository;
+    UsuarioService usuarioService;
+
+    @Autowired
+    InsigniaService insigniaService;
 
     @Override
     public List<RetoRespuestaDTO> listarRetosActivos() {
@@ -131,7 +136,8 @@ public class RetoServiceImpl implements RetoService {
         int puntosRecompensa = usuarioReto.getReto().getPuntosRecompensa() == null
                 ? 0 : usuarioReto.getReto().getPuntosRecompensa();
         usuarioReto.getUsuario().setEcoPuntos(puntosActuales + puntosRecompensa);
-        usuarioRepository.save(usuarioReto.getUsuario());
+        Usuario usuarioActualizado = usuarioService.actualizarNivel(usuarioReto.getUsuario());
+        insigniaService.evaluarYDesbloquearInsignias(usuarioActualizado);
 
         return convertirARespuesta(usuarioRetoRepository.save(usuarioReto));
     }

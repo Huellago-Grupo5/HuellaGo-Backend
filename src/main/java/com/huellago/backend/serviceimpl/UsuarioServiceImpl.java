@@ -8,10 +8,12 @@ import com.huellago.backend.dtos.TokenDTO;
 import com.huellago.backend.dtos.UsuarioPerfilDTO;
 import com.huellago.backend.dtos.EcoPuntosAccionDTO;
 import com.huellago.backend.dtos.EcoPuntosRespuestaDTO;
+import com.huellago.backend.dtos.NivelRespuestaDTO;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.security.JwtUtilService;
 import com.huellago.backend.security.UserSecurity;
+import com.huellago.backend.services.InsigniaService;
 import com.huellago.backend.services.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -37,6 +39,9 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Autowired
     JwtUtilService jwtUtilService;
+
+    @Autowired
+    InsigniaService insigniaService;
 
 
     @Override
@@ -165,13 +170,35 @@ public class UsuarioServiceImpl implements UsuarioService {
 
         int ecoPuntosActuales = usuario.getEcoPuntos() == null ? 0 : usuario.getEcoPuntos();
         usuario.setEcoPuntos(ecoPuntosActuales + puntos);
-        Usuario usuarioActualizado = usuarioRepository.save(usuario);
+        Usuario usuarioActualizado = actualizarNivel(usuario);
+        insigniaService.evaluarYDesbloquearInsignias(usuarioActualizado);
 
         return new EcoPuntosRespuestaDTO(
                 usuarioActualizado.getId(),
                 usuarioActualizado.getEcoPuntos(),
                 puntos,
                 accion
+        );
+    }
+
+    @Override
+    public Usuario actualizarNivel(Usuario usuario) {
+        int ecoPuntos = usuario.getEcoPuntos() == null ? 0 : usuario.getEcoPuntos();
+        usuario.setNivel((ecoPuntos / 100) + 1);
+        return usuarioRepository.save(usuario);
+    }
+
+    @Override
+    public NivelRespuestaDTO obtenerNivel(Usuario usuario) {
+        int ecoPuntos = usuario.getEcoPuntos() == null ? 0 : usuario.getEcoPuntos();
+        int puntosEnNivel = ecoPuntos % 100;
+        return new NivelRespuestaDTO(
+                usuario.getId(),
+                ecoPuntos,
+                (ecoPuntos / 100) + 1,
+                puntosEnNivel,
+                100 - puntosEnNivel,
+                puntosEnNivel
         );
     }
 

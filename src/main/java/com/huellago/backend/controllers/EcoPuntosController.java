@@ -2,6 +2,7 @@ package com.huellago.backend.controllers;
 
 import com.huellago.backend.dtos.EcoPuntosAccionDTO;
 import com.huellago.backend.dtos.EcoPuntosRespuestaDTO;
+import com.huellago.backend.dtos.NivelRespuestaDTO;
 import com.huellago.backend.security.UserSecurity;
 import com.huellago.backend.services.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +30,12 @@ public class EcoPuntosController {
             @AuthenticationPrincipal UserSecurity userSecurity) {
         return ResponseEntity.ok(usuarioService.otorgarEcoPuntos(
                 userSecurity.getUser(), dto));
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping("/nivel")
+    public ResponseEntity<NivelRespuestaDTO> obtenerNivel(
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(usuarioService.obtenerNivel(userSecurity.getUser()));
     }
 
     @ExceptionHandler(ResponseStatusException.class)
