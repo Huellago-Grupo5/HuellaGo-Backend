@@ -1,7 +1,9 @@
 package com.huellago.backend.controllers;
 
 import com.huellago.backend.dtos.AlimentacionResiduosDTO;
+import com.huellago.backend.dtos.AlimentacionResiduosRespuestaDTO;
 import com.huellago.backend.dtos.EnergiaDTO;
+import com.huellago.backend.dtos.EnergiaRespuestaDTO;
 import com.huellago.backend.dtos.HabitoRespuestaDTO;
 import com.huellago.backend.dtos.TransporteDTO;
 import com.huellago.backend.dtos.TransporteRespuestaDTO;
@@ -20,8 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-
-import java.util.List;
 
 @RestController
 @CrossOrigin("*")
@@ -43,14 +43,15 @@ public class HabitoController {
     }
 
     @PostMapping("/energia")
-    public ResponseEntity<List<HabitoRespuestaDTO>> registrarEnergia(@RequestBody EnergiaDTO energiaDTO,
-                                                                      @AuthenticationPrincipal UserSecurity userSecurity) {
+    public ResponseEntity<EnergiaRespuestaDTO> registrarEnergia(
+            @RequestBody EnergiaDTO energiaDTO,
+            @AuthenticationPrincipal UserSecurity userSecurity) {
         usuarioAuthorizationService.validarPropietario(energiaDTO.getUsuarioId(), userSecurity);
         return new ResponseEntity<>(habitoService.registrarEnergia(energiaDTO), HttpStatus.CREATED);
     }
 
     @PostMapping("/alimentacion-residuos")
-    public ResponseEntity<List<HabitoRespuestaDTO>> registrarAlimentacionResiduos(
+    public ResponseEntity<AlimentacionResiduosRespuestaDTO> registrarAlimentacionResiduos(
             @RequestBody AlimentacionResiduosDTO dto,
             @AuthenticationPrincipal UserSecurity userSecurity) {
         usuarioAuthorizationService.validarPropietario(dto.getUsuarioId(), userSecurity);
