@@ -1,9 +1,12 @@
 package com.huellago.backend.serviceimpl;
 
 import com.huellago.backend.dtos.AlimentacionResiduosDTO;
+import com.huellago.backend.dtos.AlimentacionResiduosRespuestaDTO;
 import com.huellago.backend.dtos.EnergiaDTO;
+import com.huellago.backend.dtos.EnergiaRespuestaDTO;
 import com.huellago.backend.dtos.HabitoRespuestaDTO;
 import com.huellago.backend.dtos.TransporteDTO;
+import com.huellago.backend.dtos.TransporteRespuestaDTO;
 import com.huellago.backend.dtos.ActualizarHabitoDTO;
 import com.huellago.backend.entities.CategoriaHabito;
 import com.huellago.backend.entities.Habito;
@@ -19,8 +22,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 import java.util.Locale;
 
@@ -37,7 +38,7 @@ public class HabitoServiceImpl implements HabitoService {
     CategoriaHabitoRepository categoriaHabitoRepository;
 
     @Override
-    public List<HabitoRespuestaDTO> registrarTransporte(TransporteDTO dto) {
+    public TransporteRespuestaDTO registrarTransporte(TransporteDTO dto) {
         validarNoNulo(dto.getUsuarioId(), "usuarioId");
         validarPermitido(dto.getMedio(), Set.of("Bicicleta", "Caminando", "Bus", "Auto", "Moto"), "medio");
         validarPositivo(dto.getKmSemana(), "kmSemana");
@@ -45,15 +46,21 @@ public class HabitoServiceImpl implements HabitoService {
 
         Usuario usuario = buscarUsuario(dto.getUsuarioId());
         CategoriaHabito categoria = buscarCategoria("Transporte");
-        List<HabitoRespuestaDTO> respuestas = new ArrayList<>();
-        respuestas.add(guardarHabito(usuario, categoria, "medio", BigDecimal.ZERO, dto.getMedio()));
-        respuestas.add(guardarHabito(usuario, categoria, "kmSemana", dto.getKmSemana(), "km/semana"));
-        respuestas.add(guardarHabito(usuario, categoria, "diasSemana", BigDecimal.valueOf(dto.getDiasSemana()), "dias/semana"));
-        return respuestas;
+        guardarHabito(usuario, categoria, "medio", BigDecimal.ZERO, dto.getMedio());
+        guardarHabito(usuario, categoria, "kmSemana", dto.getKmSemana(), "km/semana");
+        guardarHabito(usuario, categoria, "diasSemana", BigDecimal.valueOf(dto.getDiasSemana()), "dias/semana");
+
+        return new TransporteRespuestaDTO(
+                usuario.getId(),
+                categoria.getId(),
+                dto.getMedio(),
+                dto.getKmSemana(),
+                dto.getDiasSemana()
+        );
     }
 
     @Override
-    public List<HabitoRespuestaDTO> registrarEnergia(EnergiaDTO dto) {
+    public EnergiaRespuestaDTO registrarEnergia(EnergiaDTO dto) {
         validarNoNulo(dto.getUsuarioId(), "usuarioId");
         validarPermitido(dto.getVivienda(), Set.of("Casa", "Departamento"), "vivienda");
         validarPositivo(dto.getPersonas(), "personas");
@@ -61,15 +68,21 @@ public class HabitoServiceImpl implements HabitoService {
 
         Usuario usuario = buscarUsuario(dto.getUsuarioId());
         CategoriaHabito categoria = buscarCategoria("Energía");
-        List<HabitoRespuestaDTO> respuestas = new ArrayList<>();
-        respuestas.add(guardarHabito(usuario, categoria, "vivienda", BigDecimal.ZERO, dto.getVivienda()));
-        respuestas.add(guardarHabito(usuario, categoria, "personas", BigDecimal.valueOf(dto.getPersonas()), "personas"));
-        respuestas.add(guardarHabito(usuario, categoria, "fuente", BigDecimal.ZERO, dto.getFuente()));
-        return respuestas;
+        guardarHabito(usuario, categoria, "vivienda", BigDecimal.ZERO, dto.getVivienda());
+        guardarHabito(usuario, categoria, "personas", BigDecimal.valueOf(dto.getPersonas()), "personas");
+        guardarHabito(usuario, categoria, "fuente", BigDecimal.ZERO, dto.getFuente());
+
+        return new EnergiaRespuestaDTO(
+                usuario.getId(),
+                categoria.getId(),
+                dto.getVivienda(),
+                dto.getPersonas(),
+                dto.getFuente()
+        );
     }
 
     @Override
-    public List<HabitoRespuestaDTO> registrarAlimentacionResiduos(AlimentacionResiduosDTO dto) {
+    public AlimentacionResiduosRespuestaDTO registrarAlimentacionResiduos(AlimentacionResiduosDTO dto) {
         validarNoNulo(dto.getUsuarioId(), "usuarioId");
         validarPermitido(dto.getTipo(), Set.of("Vegana", "Vegetariana", "Mixta"), "tipo");
         validarPermitido(dto.getPlasticos(), Set.of("Bajo", "Medio", "Alto"), "plasticos");
@@ -78,12 +91,19 @@ public class HabitoServiceImpl implements HabitoService {
         Usuario usuario = buscarUsuario(dto.getUsuarioId());
         CategoriaHabito alimentacion = buscarCategoria("Alimentación");
         CategoriaHabito residuos = buscarCategoria("Residuos");
-        List<HabitoRespuestaDTO> respuestas = new ArrayList<>();
-        respuestas.add(guardarHabito(usuario, alimentacion, "tipo", BigDecimal.ZERO, dto.getTipo()));
-        respuestas.add(guardarHabito(usuario, residuos, "plasticos", BigDecimal.ZERO, dto.getPlasticos()));
-        respuestas.add(guardarHabito(usuario, residuos, "reciclas",
-                dto.getReciclas() ? BigDecimal.ONE : BigDecimal.ZERO, "boolean"));
-        return respuestas;
+        guardarHabito(usuario, alimentacion, "tipo", BigDecimal.ZERO, dto.getTipo());
+        guardarHabito(usuario, residuos, "plasticos", BigDecimal.ZERO, dto.getPlasticos());
+        guardarHabito(usuario, residuos, "reciclas",
+                dto.getReciclas() ? BigDecimal.ONE : BigDecimal.ZERO, "boolean");
+
+        return new AlimentacionResiduosRespuestaDTO(
+                usuario.getId(),
+                alimentacion.getId(),
+                residuos.getId(),
+                dto.getTipo(),
+                dto.getPlasticos(),
+                dto.getReciclas()
+        );
     }
 
     @Override
