@@ -4,6 +4,7 @@ import com.huellago.backend.dtos.AlimentacionResiduosDTO;
 import com.huellago.backend.dtos.EnergiaDTO;
 import com.huellago.backend.dtos.HabitoRespuestaDTO;
 import com.huellago.backend.dtos.TransporteDTO;
+import com.huellago.backend.dtos.TransporteRespuestaDTO;
 import com.huellago.backend.dtos.ActualizarHabitoDTO;
 import com.huellago.backend.services.HabitoService;
 import com.huellago.backend.security.UserSecurity;
@@ -34,8 +35,9 @@ public class HabitoController {
     UsuarioAuthorizationService usuarioAuthorizationService;
 
     @PostMapping("/transporte")
-    public ResponseEntity<List<HabitoRespuestaDTO>> registrarTransporte(@RequestBody TransporteDTO transporteDTO,
-                                                                         @AuthenticationPrincipal UserSecurity userSecurity) {
+    public ResponseEntity<TransporteRespuestaDTO> registrarTransporte(
+            @RequestBody TransporteDTO transporteDTO,
+            @AuthenticationPrincipal UserSecurity userSecurity) {
         usuarioAuthorizationService.validarPropietario(transporteDTO.getUsuarioId(), userSecurity);
         return new ResponseEntity<>(habitoService.registrarTransporte(transporteDTO), HttpStatus.CREATED);
     }

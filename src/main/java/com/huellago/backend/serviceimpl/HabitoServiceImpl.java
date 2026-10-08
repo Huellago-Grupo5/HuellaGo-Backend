@@ -4,6 +4,7 @@ import com.huellago.backend.dtos.AlimentacionResiduosDTO;
 import com.huellago.backend.dtos.EnergiaDTO;
 import com.huellago.backend.dtos.HabitoRespuestaDTO;
 import com.huellago.backend.dtos.TransporteDTO;
+import com.huellago.backend.dtos.TransporteRespuestaDTO;
 import com.huellago.backend.dtos.ActualizarHabitoDTO;
 import com.huellago.backend.entities.CategoriaHabito;
 import com.huellago.backend.entities.Habito;
@@ -37,7 +38,7 @@ public class HabitoServiceImpl implements HabitoService {
     CategoriaHabitoRepository categoriaHabitoRepository;
 
     @Override
-    public List<HabitoRespuestaDTO> registrarTransporte(TransporteDTO dto) {
+    public TransporteRespuestaDTO registrarTransporte(TransporteDTO dto) {
         validarNoNulo(dto.getUsuarioId(), "usuarioId");
         validarPermitido(dto.getMedio(), Set.of("Bicicleta", "Caminando", "Bus", "Auto", "Moto"), "medio");
         validarPositivo(dto.getKmSemana(), "kmSemana");
@@ -45,11 +46,17 @@ public class HabitoServiceImpl implements HabitoService {
 
         Usuario usuario = buscarUsuario(dto.getUsuarioId());
         CategoriaHabito categoria = buscarCategoria("Transporte");
-        List<HabitoRespuestaDTO> respuestas = new ArrayList<>();
-        respuestas.add(guardarHabito(usuario, categoria, "medio", BigDecimal.ZERO, dto.getMedio()));
-        respuestas.add(guardarHabito(usuario, categoria, "kmSemana", dto.getKmSemana(), "km/semana"));
-        respuestas.add(guardarHabito(usuario, categoria, "diasSemana", BigDecimal.valueOf(dto.getDiasSemana()), "dias/semana"));
-        return respuestas;
+        guardarHabito(usuario, categoria, "medio", BigDecimal.ZERO, dto.getMedio());
+        guardarHabito(usuario, categoria, "kmSemana", dto.getKmSemana(), "km/semana");
+        guardarHabito(usuario, categoria, "diasSemana", BigDecimal.valueOf(dto.getDiasSemana()), "dias/semana");
+
+        return new TransporteRespuestaDTO(
+                usuario.getId(),
+                categoria.getId(),
+                dto.getMedio(),
+                dto.getKmSemana(),
+                dto.getDiasSemana()
+        );
     }
 
     @Override
