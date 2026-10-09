@@ -22,6 +22,8 @@ public interface HabitoRepository extends JpaRepository<Habito, Long> {
     @Query("SELECT COUNT(h) FROM Habito h WHERE h.usuario.id = :usuarioId AND LOWER(h.categoria.nombre) = LOWER(:nombreCategoria)")
     public Long contarHabitosUsuarioPorCategoria(Long usuarioId, String nombreCategoria);
 
-    @Query(value = "SELECT COUNT(*) FROM habitos WHERE usuario_id = :usuarioId", nativeQuery = true)
-    public Long contarHabitosUsuario_SQL(Long usuarioId);
+    @Query(value = "SELECT c.nombre FROM habitos h JOIN categorias_habito c ON c.id = h.categoria_id "
+            + "WHERE h.usuario_id = :usuarioId GROUP BY c.id, c.nombre "
+            + "ORDER BY COUNT(*) DESC, c.nombre ASC LIMIT 1", nativeQuery = true)
+    public String buscarCategoriaConMasHabitos_SQL(Long usuarioId);
 }

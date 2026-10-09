@@ -18,6 +18,7 @@ import com.huellago.backend.services.HabitoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -38,6 +39,7 @@ public class HabitoServiceImpl implements HabitoService {
     CategoriaHabitoRepository categoriaHabitoRepository;
 
     @Override
+    @Transactional
     public TransporteRespuestaDTO registrarTransporte(TransporteDTO dto) {
         validarNoNulo(dto.getUsuarioId(), "usuarioId");
         validarPermitido(dto.getMedio(), Set.of("Bicicleta", "Caminando", "Bus", "Auto", "Moto"), "medio");
@@ -46,6 +48,7 @@ public class HabitoServiceImpl implements HabitoService {
 
         Usuario usuario = buscarUsuario(dto.getUsuarioId());
         CategoriaHabito categoria = buscarCategoria("Transporte");
+        validarCategoriaNoRegistrada(usuario.getId(), categoria, "Transporte");
         guardarHabito(usuario, categoria, "medio", BigDecimal.ZERO, dto.getMedio());
         guardarHabito(usuario, categoria, "kmSemana", dto.getKmSemana(), "km/semana");
         guardarHabito(usuario, categoria, "diasSemana", BigDecimal.valueOf(dto.getDiasSemana()), "dias/semana");
@@ -60,6 +63,7 @@ public class HabitoServiceImpl implements HabitoService {
     }
 
     @Override
+    @Transactional
     public EnergiaRespuestaDTO registrarEnergia(EnergiaDTO dto) {
         validarNoNulo(dto.getUsuarioId(), "usuarioId");
         validarPermitido(dto.getVivienda(), Set.of("Casa", "Departamento"), "vivienda");
@@ -68,6 +72,7 @@ public class HabitoServiceImpl implements HabitoService {
 
         Usuario usuario = buscarUsuario(dto.getUsuarioId());
         CategoriaHabito categoria = buscarCategoria("Energía");
+        validarCategoriaNoRegistrada(usuario.getId(), categoria, "Energía");
         guardarHabito(usuario, categoria, "vivienda", BigDecimal.ZERO, dto.getVivienda());
         guardarHabito(usuario, categoria, "personas", BigDecimal.valueOf(dto.getPersonas()), "personas");
         guardarHabito(usuario, categoria, "fuente", BigDecimal.ZERO, dto.getFuente());
@@ -82,6 +87,7 @@ public class HabitoServiceImpl implements HabitoService {
     }
 
     @Override
+    @Transactional
     public AlimentacionResiduosRespuestaDTO registrarAlimentacionResiduos(AlimentacionResiduosDTO dto) {
         validarNoNulo(dto.getUsuarioId(), "usuarioId");
         validarPermitido(dto.getTipo(), Set.of("Vegana", "Vegetariana", "Mixta"), "tipo");
@@ -91,6 +97,8 @@ public class HabitoServiceImpl implements HabitoService {
         Usuario usuario = buscarUsuario(dto.getUsuarioId());
         CategoriaHabito alimentacion = buscarCategoria("Alimentación");
         CategoriaHabito residuos = buscarCategoria("Residuos");
+        validarCategoriaNoRegistrada(usuario.getId(), alimentacion, "Alimentación");
+        validarCategoriaNoRegistrada(usuario.getId(), residuos, "Residuos");
         guardarHabito(usuario, alimentacion, "tipo", BigDecimal.ZERO, dto.getTipo());
         guardarHabito(usuario, residuos, "plasticos", BigDecimal.ZERO, dto.getPlasticos());
         guardarHabito(usuario, residuos, "reciclas",
@@ -114,9 +122,14 @@ public class HabitoServiceImpl implements HabitoService {
                     "Nombre, valor y unidad son obligatorios");
         }
 
-        Habito habito = habitoRepository.findByIdAndUsuario_Id(id, usuario.getId())
+        Habito habito = habitoRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Hábito no encontrado"));
+
+        if (habito.getUsuario() == null || !habito.getUsuario().getId().equals(usuario.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "No tiene autorización para modificar este hábito");
+        }
 
         validarCompatibilidad(habito, dto);
         habito.setNombre(dto.getNombre().trim());
@@ -141,6 +154,15 @@ public class HabitoServiceImpl implements HabitoService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Categoría " + nombre + " no encontrada");
         }
         return categoria;
+    }
+
+    private void validarCategoriaNoRegistrada(Long usuarioId, CategoriaHabito categoria, String nombreCategoria) {
+        if (habitoRepository.countByUsuario_IdAndCategoria_NombreIgnoreCase(
+                usuarioId, categoria.getNombre()) > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La categoría " + nombreCategoria
+                            + " ya está registrada; utilice PUT /habitos/{id} para actualizarla");
+        }
     }
 
     private HabitoRespuestaDTO guardarHabito(Usuario usuario, CategoriaHabito categoria,

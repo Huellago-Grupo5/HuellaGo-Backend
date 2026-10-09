@@ -11,6 +11,10 @@ import com.huellago.backend.services.DashboardService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 @Service
 public class DashboardServiceImpl implements DashboardService {
 
@@ -40,6 +44,13 @@ public class DashboardServiceImpl implements DashboardService {
                     org.springframework.http.HttpStatus.NOT_FOUND, "Usuario no encontrado");
         }
 
+        List<String> categorias = List.of("Transporte", "Energía", "Alimentación", "Residuos");
+        Map<String, Long> habitosPorCategoria = new LinkedHashMap<>();
+        for (String categoria : categorias) {
+            habitosPorCategoria.put(categoria,
+                    habitoRepository.contarHabitosUsuarioPorCategoria(usuarioId, categoria));
+        }
+
         return new DashboardDTO(
                 usuario.getId(),
                 usuario.getEcoPuntos(),
@@ -47,7 +58,11 @@ public class DashboardServiceImpl implements DashboardService {
                 habitoRepository.contarHabitosUsuario(usuarioId),
                 huellaCarbonoRepository.buscarHuellaActual_SQL(usuarioId),
                 usuarioRetoRepository.contarRetosActivosUsuario(usuarioId),
-                usuarioRecomendacionIARepository.contarRecomendacionesPendientesUsuario(usuarioId)
+                usuarioRecomendacionIARepository.contarRecomendacionesPendientesUsuario(usuarioId),
+                habitosPorCategoria,
+                habitoRepository.buscarCategoriaConMasHabitos_SQL(usuarioId),
+                usuarioRetoRepository.contarRetosCompletadosUsuario_SQL(usuarioId),
+                usuarioRecomendacionIARepository.contarRecomendacionesCompletadasUsuario_SQL(usuarioId)
         );
     }
 }

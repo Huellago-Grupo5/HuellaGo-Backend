@@ -19,6 +19,6 @@ public interface UsuarioRetoRepository extends JpaRepository<UsuarioReto, Intege
     @Query("SELECT COUNT(ur) FROM UsuarioReto ur WHERE ur.usuario.id = :usuarioId AND LOWER(ur.estado) = 'activo'")
     public Long contarRetosActivosUsuario(Long usuarioId);
 
-    @Query(value = "SELECT COUNT(*) FROM usuarios_retos WHERE usuario_id = :usuarioId AND LOWER(estado) = 'activo'", nativeQuery = true)
-    public Long contarRetosActivosUsuario_SQL(Long usuarioId);
+    @Query(value = "SELECT COUNT(*) FROM usuarios_retos WHERE usuario_id = :usuarioId AND LOWER(estado) = 'completado'", nativeQuery = true)
+    public Long contarRetosCompletadosUsuario_SQL(Long usuarioId);
 }

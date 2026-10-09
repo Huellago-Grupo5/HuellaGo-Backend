@@ -61,3 +61,29 @@ SELECT
     TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE LOWER(correo) = LOWER('demo@huellago.com')
 );
+
+INSERT INTO habitos (
+    nombre, valor, unidad, fecha_registro, fecha_actualizacion, usuario_id, categoria_id
+)
+SELECT datos.nombre, datos.valor, datos.unidad, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+       u.id, c.id
+FROM (VALUES
+    ('medio', 0::numeric, 'Bus', 'Transporte'),
+    ('kmSemana', 120::numeric, 'km/semana', 'Transporte'),
+    ('diasSemana', 5::numeric, 'dias/semana', 'Transporte'),
+    ('vivienda', 0::numeric, 'Casa', 'Energía'),
+    ('personas', 3::numeric, 'personas', 'Energía'),
+    ('fuente', 0::numeric, 'Electricidad', 'Energía'),
+    ('tipo', 0::numeric, 'Mixta', 'Alimentación')
+) AS datos(nombre, valor, unidad, categoria_nombre)
+JOIN usuarios u ON LOWER(u.correo) = LOWER('demo@huellago.com')
+JOIN categorias_habito c
+  ON LOWER(translate(c.nombre, 'áéíóúÁÉÍÓÚ', 'aeiouAEIOU')) =
+     LOWER(translate(datos.categoria_nombre, 'áéíóúÁÉÍÓÚ', 'aeiouAEIOU'))
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM habitos h
+    WHERE h.usuario_id = u.id
+      AND h.categoria_id = c.id
+      AND h.nombre = datos.nombre
+);

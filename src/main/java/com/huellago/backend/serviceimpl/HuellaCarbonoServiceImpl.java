@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -72,7 +73,19 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
         Map<String, List<Habito>> habitosPorCategoria = habitos.stream()
                 .filter(habito -> habito.getCategoria() != null
                         && habito.getCategoria().getNombre() != null)
-                .collect(Collectors.groupingBy(habito -> habito.getCategoria().getNombre().toLowerCase()));
+                .collect(Collectors.groupingBy(
+                        habito -> habito.getCategoria().getNombre().toLowerCase(Locale.ROOT),
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+
+        List<String> categoriasFaltantes = List.of("Transporte", "Energía", "Alimentación", "Residuos")
+                .stream()
+                .filter(categoria -> !habitosPorCategoria.containsKey(categoria.toLowerCase(Locale.ROOT)))
+                .toList();
+        if (!categoriasFaltantes.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Faltan categorías por registrar: " + String.join(", ", categoriasFaltantes));
+        }
 
         BigDecimal co2Transporte = calcularTransporte(requerirCategoria(habitosPorCategoria, "transporte"));
         BigDecimal co2Energia = calcularEnergia(requerirCategoria(habitosPorCategoria, "energía"));

@@ -57,12 +57,11 @@ public class HuellaCarbonoController {
                 huellaCarbonoService.recalcularHuella(userSecurity.getUser().getId()));
     }
 
-    @PostMapping("/calcular/{usuarioId}")
+    @PostMapping("/calcular")
     public ResponseEntity<HuellaCarbonoRespuestaDTO> calcular(
-            @PathVariable("usuarioId") Long usuarioId,
             @AuthenticationPrincipal UserSecurity userSecurity) {
-        usuarioAuthorizationService.validarPropietario(usuarioId, userSecurity);
-        return ResponseEntity.ok(huellaCarbonoService.calcularHuellaInicial(usuarioId));
+        return ResponseEntity.ok(huellaCarbonoService.calcularHuellaInicial(
+                userSecurity.getUser().getId()));
     }
 
     @GetMapping("/{usuarioId}")
