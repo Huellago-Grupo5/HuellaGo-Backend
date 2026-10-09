@@ -51,3 +51,13 @@ SELECT 'Reto ahorro de energía', 'Reduce el consumo de energía durante una sem
 FROM categorias_habito c
 WHERE LOWER(c.nombre) = LOWER('Energía')
   AND NOT EXISTS (SELECT 1 FROM retos WHERE titulo = 'Reto ahorro de energía');
+
+INSERT INTO usuarios (
+    nombres, apellidos, correo, contrasena, eco_puntos, nivel, notificaciones_activas, visibilidad_comunidad, fecha_creacion, fecha_actualizacion
+)
+SELECT
+    'Usuario', 'Demo', 'demo@huellago.com',
+    '$2a$10$lh9i0gy56MO3yWar8NZ.ZeUMIhtMXiGMX57ZWOd1ZdeaG7GOtdT0.', 0, 1, TRUE,
+    TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE LOWER(correo) = LOWER('demo@huellago.com')
+);
