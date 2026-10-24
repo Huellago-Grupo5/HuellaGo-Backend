@@ -47,7 +47,8 @@ public class RetoServiceImpl implements RetoService {
         LocalDate hoy = LocalDate.now();
         return retoRepository.findByActivoTrueOrderByFechaInicioAsc()
                 .stream()
-                .filter(reto -> reto.getTipo() != TipoReto.COLECTIVO && disponible(reto, hoy))
+                .filter(reto -> reto.getTipo() != TipoReto.COLECTIVO
+                        && reto.getRecomendacionOrigen() == null && disponible(reto, hoy))
                 .map(this::convertirADTO)
                 .toList();
     }
@@ -67,6 +68,10 @@ public class RetoServiceImpl implements RetoService {
         if (reto.getTipo() == TipoReto.COLECTIVO) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Use la ruta de participación colectiva");
+        }
+
+        if (reto.getRecomendacionOrigen() != null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Reto no encontrado");
         }
 
         if (!disponible(reto, LocalDate.now())) {

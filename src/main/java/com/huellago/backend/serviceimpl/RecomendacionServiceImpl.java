@@ -1,6 +1,7 @@
 package com.huellago.backend.serviceimpl;
 
 import com.huellago.backend.dtos.GeneracionRecomendacionesDTO;
+import com.huellago.backend.dtos.ConversionRecomendacionDTO;
 import com.huellago.backend.dtos.RecomendacionPersonalizadaDTO;
 import com.huellago.backend.entities.*;
 import com.huellago.backend.repositories.*;
@@ -14,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.*;
 
 @Service
@@ -31,6 +33,56 @@ public class RecomendacionServiceImpl implements RecomendacionService {
     RecomendacionIARepository recomendacionIARepository;
     @Autowired
     UsuarioRecomendacionIARepository usuarioRecomendacionIARepository;
+    @Autowired
+    RetoRepository retoRepository;
+    @Autowired
+    UsuarioRetoRepository usuarioRetoRepository;
+
+    @Override
+    @Transactional
+    public ConversionRecomendacionDTO convertirEnReto(Integer asociacionId, Usuario autenticado) {
+        if (autenticado == null || autenticado.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Se requiere autenticación");
+        }
+        Long usuarioId = autenticado.getId();
+        usuarioRecomendacionIARepository.bloquearPropia(asociacionId, usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Recomendación no encontrada para el usuario"));
+        UsuarioRecomendacionIA asociacion = usuarioRecomendacionIARepository.findById(asociacionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Recomendación no encontrada para el usuario"));
+        if (retoRepository.existsByRecomendacionOrigen_Id(asociacionId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La recomendación ya fue convertida en reto");
+        }
+        RecomendacionIA recomendacion = asociacion.getRecomendacionIA();
+        if (recomendacion == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La recomendación no tiene contenido para convertir");
+        }
+
+        Reto reto = new Reto();
+        reto.setTitulo(recomendacion.getTitulo());
+        reto.setDescripcion(recomendacion.getDescripcion());
+        reto.setCategoria(recomendacion.getCategoria());
+        reto.setPuntosRecompensa(0);
+        reto.setFechaInicio(LocalDate.now());
+        reto.setActivo(true);
+        reto.setTipo(TipoReto.INDIVIDUAL);
+        reto.setRecomendacionOrigen(asociacion);
+        reto = retoRepository.saveAndFlush(reto);
+
+        UsuarioReto participacion = new UsuarioReto();
+        participacion.setUsuario(asociacion.getUsuario());
+        participacion.setReto(reto);
+        participacion.setEstado("activo");
+        participacion.setProgreso(BigDecimal.ZERO);
+        participacion.setFechaAceptacion(LocalDateTime.now());
+        participacion = usuarioRetoRepository.saveAndFlush(participacion);
+        return new ConversionRecomendacionDTO("Recomendación convertida en reto personal",
+                asociacionId, reto.getId(), participacion.getId(), participacion.getEstado(),
+                participacion.getFechaAceptacion());
+    }
 
     private enum Categoria {
         TRANSPORTE("Transporte", "medio", "kmsemana", "diassemana"),

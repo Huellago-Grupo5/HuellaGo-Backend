@@ -31,6 +31,10 @@ public class Reto {
     private TipoReto tipo = TipoReto.INDIVIDUAL;
 
     @ManyToOne
+    @JoinColumn(name = "usuario_recomendacion_ia_id", unique = true)
+    private UsuarioRecomendacionIA recomendacionOrigen;
+
+    @ManyToOne
     @JoinColumn(name = "categoria_id")
     private CategoriaHabito categoria;
 
