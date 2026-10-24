@@ -5,9 +5,14 @@ import com.huellago.backend.dtos.HuellaDesgloseDTO;
 import com.huellago.backend.dtos.HuellaEquivalenciasDTO;
 import com.huellago.backend.dtos.ComparacionPromedioDTO;
 import com.huellago.backend.services.HuellaCarbonoService;
+import com.huellago.backend.services.ReporteAmbientalService;
 import com.huellago.backend.security.UserSecurity;
 import com.huellago.backend.security.UsuarioAuthorizationService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.util.List;
+import java.nio.charset.StandardCharsets;
 
 @RestController
 @CrossOrigin("*")
@@ -29,6 +35,9 @@ public class HuellaCarbonoController {
 
     @Autowired
     UsuarioAuthorizationService usuarioAuthorizationService;
+
+    @Autowired
+    ReporteAmbientalService reporteAmbientalService;
 
     @GetMapping("/historial")
     public ResponseEntity<List<HuellaCarbonoRespuestaDTO>> obtenerHistorial(
@@ -56,6 +65,23 @@ public class HuellaCarbonoController {
             @AuthenticationPrincipal UserSecurity userSecurity) {
         return ResponseEntity.ok(huellaCarbonoService.compararConPromedio(
                 userSecurity.getUser().getId()));
+    }
+
+    @GetMapping(value = "/reporte", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> descargarReporte(
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        Long usuarioId = userSecurity.getUser().getId();
+        byte[] reporte = reporteAmbientalService.generarReporte(userSecurity.getUser());
+        String nombreArchivo = "reporte-ambiental-huellago-" + usuarioId + ".pdf";
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(nombreArchivo, StandardCharsets.UTF_8)
+                        .build().toString())
+                .contentLength(reporte.length)
+                .body(reporte);
     }
 
     @PostMapping("/recalcular")

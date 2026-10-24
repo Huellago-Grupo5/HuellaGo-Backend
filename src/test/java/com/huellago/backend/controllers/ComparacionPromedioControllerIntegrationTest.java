@@ -8,6 +8,7 @@ import com.huellago.backend.security.SecurityConfiguration;
 import com.huellago.backend.security.UserSecurity;
 import com.huellago.backend.security.UsuarioAuthorizationService;
 import com.huellago.backend.services.HuellaCarbonoService;
+import com.huellago.backend.services.ReporteAmbientalService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -44,6 +45,9 @@ class ComparacionPromedioControllerIntegrationTest {
 
     @MockitoBean
     HuellaCarbonoService service;
+
+    @MockitoBean
+    ReporteAmbientalService reporteAmbientalService;
 
     @MockitoBean
     UsuarioAuthorizationService authorizationService;

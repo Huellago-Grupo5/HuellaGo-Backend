@@ -16,6 +16,8 @@ public interface HuellaCarbonoRepository extends JpaRepository<HuellaCarbono, Lo
 
     public List<HuellaCarbono> findByUsuario_IdOrderByFechaCalculoDesc(Long usuarioId);
 
+    public List<HuellaCarbono> findByUsuario_IdOrderByFechaCalculoDescIdDesc(Long usuarioId);
+
     public HuellaCarbono findTopByUsuario_IdAndFechaCalculoBetweenOrderByFechaCalculoDesc(
             Long usuarioId, LocalDateTime inicio, LocalDateTime fin);
 
