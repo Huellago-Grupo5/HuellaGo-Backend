@@ -11,4 +11,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     public boolean existsByCorreoAndIdNot(String correo, Long id);
 
+    public boolean existsByCorreoIgnoreCaseAndIdNot(String correo, Long id);
+
 }

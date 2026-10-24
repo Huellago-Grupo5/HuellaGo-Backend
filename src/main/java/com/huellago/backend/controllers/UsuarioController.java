@@ -6,6 +6,7 @@ import com.huellago.backend.dtos.LoginDTO;
 import com.huellago.backend.dtos.TokenDTO;
 import com.huellago.backend.dtos.RecuperarContrasenaDTO;
 import com.huellago.backend.dtos.RestablecerContrasenaDTO;
+import com.huellago.backend.dtos.UsuarioPerfilDTO;
 import com.huellago.backend.services.UsuarioService;
 import com.huellago.backend.services.SesionService;
 import com.huellago.backend.security.JwtUtilService;
@@ -18,11 +19,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import jakarta.validation.Valid;
 
 @RestController
 @CrossOrigin("*")
@@ -82,6 +86,22 @@ public class UsuarioController {
             @RequestBody RestablecerContrasenaDTO restablecerContrasenaDTO) {
         usuarioService.restablecerContrasena(restablecerContrasenaDTO);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @PutMapping("/perfil")
+    public ResponseEntity<UsuarioRespuestaDTO> actualizarPerfil(
+            @Valid @RequestBody UsuarioPerfilDTO usuarioPerfilDTO,
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        String correoAnterior = userSecurity.getUsername();
+        UsuarioRespuestaDTO usuarioActualizado = usuarioService.actualizarPerfil(
+                correoAnterior, usuarioPerfilDTO);
+        boolean requiereReautenticacion = !correoAnterior.equalsIgnoreCase(
+                usuarioActualizado.getCorreo());
+
+        return ResponseEntity.ok()
+                .header("X-Reauthentication-Required",
+                        Boolean.toString(requiereReautenticacion))
+                .body(usuarioActualizado);
     }
 
 }

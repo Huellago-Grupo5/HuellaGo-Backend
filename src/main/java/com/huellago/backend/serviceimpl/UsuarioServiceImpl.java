@@ -10,6 +10,8 @@ import com.huellago.backend.dtos.EcoPuntosAccionDTO;
 import com.huellago.backend.dtos.EcoPuntosRespuestaDTO;
 import com.huellago.backend.dtos.NivelRespuestaDTO;
 import com.huellago.backend.entities.Usuario;
+import com.huellago.backend.entities.Sesion;
+import com.huellago.backend.repositories.SesionRepository;
 import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.security.JwtUtilService;
 import com.huellago.backend.security.UserSecurity;
@@ -19,11 +21,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Map;
+import java.util.List;
 
 @Service
 public class UsuarioServiceImpl implements UsuarioService {
@@ -42,6 +46,9 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Autowired
     InsigniaService insigniaService;
+
+    @Autowired
+    SesionRepository sesionRepository;
 
 
     @Override
@@ -116,29 +123,35 @@ public class UsuarioServiceImpl implements UsuarioService {
     }
 
     @Override
+    @Transactional
     public UsuarioRespuestaDTO actualizarPerfil(String correoAutenticado, UsuarioPerfilDTO dto) {
         Usuario usuario = buscarPorCorreo(correoAutenticado);
         if (usuario == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
         }
 
-        if (dto.getCorreo() != null && !dto.getCorreo().equalsIgnoreCase(usuario.getCorreo())
-                && usuarioRepository.existsByCorreoAndIdNot(dto.getCorreo(), usuario.getId())) {
+        String nombres = dto.getNombres().trim();
+        String apellidos = dto.getApellidos().trim();
+        String correo = dto.getCorreo().trim().toLowerCase(Locale.ROOT);
+        boolean cambioCorreo = !correo.equalsIgnoreCase(usuario.getCorreo());
+
+        if (cambioCorreo
+                && usuarioRepository.existsByCorreoIgnoreCaseAndIdNot(correo, usuario.getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya está registrado");
         }
 
-        if (dto.getNombres() != null) {
-            usuario.setNombres(dto.getNombres());
-        }
-        if (dto.getApellidos() != null) {
-            usuario.setApellidos(dto.getApellidos());
-        }
-        if (dto.getCorreo() != null) {
-            usuario.setCorreo(dto.getCorreo());
-        }
+        usuario.setNombres(nombres);
+        usuario.setApellidos(apellidos);
+        usuario.setCorreo(correo);
         usuario.setFechaActualizacion(LocalDateTime.now());
 
         Usuario usuarioActualizado = usuarioRepository.save(usuario);
+        if (cambioCorreo) {
+            List<Sesion> sesionesActivas = sesionRepository
+                    .findByUsuario_IdAndActivaTrue(usuario.getId());
+            sesionesActivas.forEach(sesion -> sesion.setActiva(false));
+            sesionRepository.saveAll(sesionesActivas);
+        }
         return new UsuarioRespuestaDTO(
                 usuarioActualizado.getId(),
                 usuarioActualizado.getNombres(),
