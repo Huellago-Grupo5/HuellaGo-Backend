@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -104,6 +105,41 @@ class HabitoServiceImplTest {
         assertEquals(409, energiaException.getStatusCode().value());
         assertEquals(409, alimentacionException.getStatusCode().value());
         verify(habitoRepository, never()).save(any(Habito.class));
+    }
+
+    @Test
+    void registraEnergiaConCategoriaAlmacenadaSinTilde() {
+        CategoriaHabito energia = categoria(10L, "Energia");
+        when(categoriaHabitoRepository.findByNombreIgnoreCase("Energía")).thenReturn(null);
+        when(categoriaHabitoRepository.findAll()).thenReturn(List.of(energia));
+        when(habitoRepository.countByUsuario_IdAndCategoria_NombreIgnoreCase(1L, "Energia"))
+                .thenReturn(0L);
+        when(habitoRepository.save(any(Habito.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var resultado = service.registrarEnergia(
+                new EnergiaDTO(1L, "Casa", 3, "Electricidad"));
+
+        assertEquals(10L, resultado.getCategoriaId());
+        verify(habitoRepository, org.mockito.Mockito.times(3)).save(any(Habito.class));
+    }
+
+    @Test
+    void registraAlimentacionYResiduosConCategoriaAlmacenadaSinTilde() {
+        CategoriaHabito alimentacion = categoria(9L, "Alimentacion");
+        CategoriaHabito residuos = categoria(11L, "Residuos");
+        when(categoriaHabitoRepository.findByNombreIgnoreCase("Alimentación")).thenReturn(null);
+        when(categoriaHabitoRepository.findByNombreIgnoreCase("Residuos")).thenReturn(residuos);
+        when(categoriaHabitoRepository.findAll()).thenReturn(List.of(alimentacion, residuos));
+        when(habitoRepository.countByUsuario_IdAndCategoria_NombreIgnoreCase(eq(1L), any(String.class)))
+                .thenReturn(0L);
+        when(habitoRepository.save(any(Habito.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var resultado = service.registrarAlimentacionResiduos(
+                new AlimentacionResiduosDTO(1L, "Mixta", "Medio", true));
+
+        assertEquals(9L, resultado.getCategoriaAlimentacionId());
+        assertEquals(11L, resultado.getCategoriaResiduosId());
+        verify(habitoRepository, org.mockito.Mockito.times(3)).save(any(Habito.class));
     }
 
     @Test

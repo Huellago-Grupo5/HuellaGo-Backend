@@ -3,6 +3,7 @@ package com.huellago.backend.controllers;
 import com.huellago.backend.dtos.HuellaCarbonoRespuestaDTO;
 import com.huellago.backend.dtos.HuellaDesgloseDTO;
 import com.huellago.backend.dtos.HuellaEquivalenciasDTO;
+import com.huellago.backend.dtos.ComparacionPromedioDTO;
 import com.huellago.backend.services.HuellaCarbonoService;
 import com.huellago.backend.security.UserSecurity;
 import com.huellago.backend.security.UsuarioAuthorizationService;
@@ -48,6 +49,13 @@ public class HuellaCarbonoController {
             @AuthenticationPrincipal UserSecurity userSecurity) {
         return ResponseEntity.ok(
                 huellaCarbonoService.obtenerHuellaDiaria(userSecurity.getUser().getId()));
+    }
+
+    @GetMapping("/comparacion-promedio")
+    public ResponseEntity<ComparacionPromedioDTO> compararConPromedio(
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(huellaCarbonoService.compararConPromedio(
+                userSecurity.getUser().getId()));
     }
 
     @PostMapping("/recalcular")

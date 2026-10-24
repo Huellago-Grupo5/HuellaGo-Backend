@@ -3,6 +3,7 @@ package com.huellago.backend.services;
 import com.huellago.backend.dtos.HuellaCarbonoRespuestaDTO;
 import com.huellago.backend.dtos.HuellaDesgloseDTO;
 import com.huellago.backend.dtos.HuellaEquivalenciasDTO;
+import com.huellago.backend.dtos.ComparacionPromedioDTO;
 
 import java.util.List;
 
@@ -14,4 +15,5 @@ public interface HuellaCarbonoService {
     public List<HuellaCarbonoRespuestaDTO> obtenerHistorial(Long usuarioId);
     public HuellaEquivalenciasDTO obtenerEquivalencias(Long usuarioId);
     public HuellaCarbonoRespuestaDTO obtenerHuellaDiaria(Long usuarioId);
+    public ComparacionPromedioDTO compararConPromedio(Long usuarioId);
 }

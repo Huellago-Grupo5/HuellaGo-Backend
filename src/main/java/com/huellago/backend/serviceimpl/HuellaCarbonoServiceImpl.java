@@ -4,6 +4,7 @@ import com.huellago.backend.dtos.HuellaCarbonoRespuestaDTO;
 import com.huellago.backend.dtos.ActividadHuellaDTO;
 import com.huellago.backend.dtos.HuellaDesgloseDTO;
 import com.huellago.backend.dtos.HuellaEquivalenciasDTO;
+import com.huellago.backend.dtos.ComparacionPromedioDTO;
 import com.huellago.backend.entities.HuellaCarbono;
 import com.huellago.backend.entities.Habito;
 import com.huellago.backend.entities.Usuario;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -30,6 +32,9 @@ import java.time.LocalDateTime;
 
 @Service
 public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
+
+    private static final String UNIDAD_HUELLA = "kg CO2e";
+    private static final String PERIODO_HUELLA = "semanal";
 
     private static final BigDecimal FACTOR_MEDIO_BICICLETA = new BigDecimal("0");
     private static final BigDecimal FACTOR_MEDIO_CAMINANDO = new BigDecimal("0");
@@ -74,13 +79,13 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
                 .filter(habito -> habito.getCategoria() != null
                         && habito.getCategoria().getNombre() != null)
                 .collect(Collectors.groupingBy(
-                        habito -> habito.getCategoria().getNombre().toLowerCase(Locale.ROOT),
+                        habito -> normalizarCategoria(habito.getCategoria().getNombre()),
                         LinkedHashMap::new,
                         Collectors.toList()));
 
         List<String> categoriasFaltantes = List.of("Transporte", "Energía", "Alimentación", "Residuos")
                 .stream()
-                .filter(categoria -> !habitosPorCategoria.containsKey(categoria.toLowerCase(Locale.ROOT)))
+                .filter(categoria -> !habitosPorCategoria.containsKey(normalizarCategoria(categoria)))
                 .toList();
         if (!categoriasFaltantes.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -88,8 +93,8 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
         }
 
         BigDecimal co2Transporte = calcularTransporte(requerirCategoria(habitosPorCategoria, "transporte"));
-        BigDecimal co2Energia = calcularEnergia(requerirCategoria(habitosPorCategoria, "energía"));
-        BigDecimal co2Alimentacion = calcularAlimentacion(requerirCategoria(habitosPorCategoria, "alimentación"));
+        BigDecimal co2Energia = calcularEnergia(requerirCategoria(habitosPorCategoria, "energia"));
+        BigDecimal co2Alimentacion = calcularAlimentacion(requerirCategoria(habitosPorCategoria, "alimentacion"));
         BigDecimal co2Residuos = calcularResiduos(requerirCategoria(habitosPorCategoria, "residuos"));
         BigDecimal co2Total = co2Transporte.add(co2Energia).add(co2Alimentacion).add(co2Residuos);
 
@@ -204,6 +209,13 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
                 "Valor inválido para " + nombre + ": " + valor);
     }
 
+    private String normalizarCategoria(String nombre) {
+        return Normalizer.normalize(nombre, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toLowerCase(Locale.ROOT)
+                .trim();
+    }
+
     private HuellaCarbonoRespuestaDTO convertirADTO(HuellaCarbono huellaCarbono) {
         return new HuellaCarbonoRespuestaDTO(
                 huellaCarbono.getUsuario().getId(), huellaCarbono.getCo2Total(),
@@ -278,6 +290,64 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
         }
 
         return convertirADTO(huellaCarbono);
+    }
+
+    @Override
+    public ComparacionPromedioDTO compararConPromedio(Long usuarioId) {
+        if (!usuarioRepository.existsById(usuarioId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
+        }
+
+        HuellaCarbono ultimaHuella = huellaCarbonoRepository
+                .findTopByUsuario_IdOrderByFechaCalculoDescIdDesc(usuarioId);
+        if (ultimaHuella == null || ultimaHuella.getCo2Total() == null
+                || ultimaHuella.getCo2Total().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "El usuario no tiene una huella de carbono calculada");
+        }
+
+        BigDecimal huellaUsuario = ultimaHuella.getCo2Total();
+        List<BigDecimal> ultimasHuellas = huellaCarbonoRepository
+                .buscarUltimasHuellasValidasPorUsuario();
+        long usuariosConDatos = ultimasHuellas.size();
+        if (usuariosConDatos < 2) {
+            return new ComparacionPromedioDTO(
+                    false, huellaUsuario, null, null, null, null,
+                    usuariosConDatos, UNIDAD_HUELLA, PERIODO_HUELLA,
+                    "No hay suficientes usuarios con cálculos válidos para realizar la comparación");
+        }
+
+        BigDecimal promedioExacto = ultimasHuellas.stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(usuariosConDatos), 10, RoundingMode.HALF_UP);
+        int comparacion = huellaUsuario.compareTo(promedioExacto);
+        String posicion = comparacion < 0 ? "POR_DEBAJO_DEL_PROMEDIO"
+                : comparacion > 0 ? "POR_ENCIMA_DEL_PROMEDIO"
+                : "IGUAL_AL_PROMEDIO";
+        BigDecimal diferenciaExacta = huellaUsuario.subtract(promedioExacto).abs();
+        BigDecimal diferenciaAbsoluta = diferenciaExacta.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal diferenciaPorcentual = promedioExacto.compareTo(BigDecimal.ZERO) == 0
+                ? null
+                : diferenciaExacta.multiply(BigDecimal.valueOf(100))
+                .divide(promedioExacto, 2, RoundingMode.HALF_UP);
+
+        String mensaje = switch (posicion) {
+            case "POR_DEBAJO_DEL_PROMEDIO" -> "Tu impacto ambiental es menor que el promedio general";
+            case "POR_ENCIMA_DEL_PROMEDIO" -> "Tu impacto ambiental es mayor que el promedio general";
+            default -> "Tu impacto ambiental es igual al promedio general";
+        };
+
+        return new ComparacionPromedioDTO(
+                true,
+                huellaUsuario.setScale(2, RoundingMode.HALF_UP),
+                promedioExacto.setScale(2, RoundingMode.HALF_UP),
+                posicion,
+                diferenciaAbsoluta,
+                diferenciaPorcentual,
+                usuariosConDatos,
+                UNIDAD_HUELLA,
+                PERIODO_HUELLA,
+                mensaje);
     }
 
     private Long equivalencia(BigDecimal co2Total, int factor) {

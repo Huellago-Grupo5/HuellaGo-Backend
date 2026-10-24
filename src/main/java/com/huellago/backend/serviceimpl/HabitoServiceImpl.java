@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.Locale;
@@ -151,6 +152,14 @@ public class HabitoServiceImpl implements HabitoService {
     private CategoriaHabito buscarCategoria(String nombre) {
         CategoriaHabito categoria = categoriaHabitoRepository.findByNombreIgnoreCase(nombre);
         if (categoria == null) {
+            String nombreNormalizado = normalizarCategoria(nombre);
+            categoria = categoriaHabitoRepository.findAll().stream()
+                    .filter(categoriaExistente -> categoriaExistente.getNombre() != null
+                            && normalizarCategoria(categoriaExistente.getNombre()).equals(nombreNormalizado))
+                    .findFirst()
+                    .orElse(null);
+        }
+        if (categoria == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Categoría " + nombre + " no encontrada");
         }
         return categoria;
@@ -190,7 +199,7 @@ public class HabitoServiceImpl implements HabitoService {
     }
 
     private void validarCompatibilidad(Habito habito, ActualizarHabitoDTO dto) {
-        String categoria = habito.getCategoria().getNombre().toLowerCase(Locale.ROOT);
+        String categoria = normalizarCategoria(habito.getCategoria().getNombre());
         String nombre = dto.getNombre().trim().toLowerCase(Locale.ROOT);
         BigDecimal valor = dto.getValor();
 
@@ -224,6 +233,13 @@ public class HabitoServiceImpl implements HabitoService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "El valor de reciclas debe ser 0 o 1");
         }
+    }
+
+    private String normalizarCategoria(String nombre) {
+        return Normalizer.normalize(nombre, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toLowerCase(Locale.ROOT)
+                .trim();
     }
 
     private void validarPermitido(String valor, Set<String> permitidos, String campo) {
