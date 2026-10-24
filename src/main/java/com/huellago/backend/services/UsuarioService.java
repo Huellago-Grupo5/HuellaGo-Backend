@@ -9,6 +9,8 @@ import com.huellago.backend.dtos.UsuarioPerfilDTO;
 import com.huellago.backend.dtos.EcoPuntosAccionDTO;
 import com.huellago.backend.dtos.EcoPuntosRespuestaDTO;
 import com.huellago.backend.dtos.NivelRespuestaDTO;
+import com.huellago.backend.dtos.PreferenciaNotificacionActualizarDTO;
+import com.huellago.backend.dtos.PreferenciaNotificacionDTO;
 import com.huellago.backend.entities.Usuario;
 
 public interface UsuarioService {
@@ -20,4 +22,7 @@ public interface UsuarioService {
     public EcoPuntosRespuestaDTO otorgarEcoPuntos(Usuario usuario, EcoPuntosAccionDTO ecoPuntosAccionDTO);
     public Usuario actualizarNivel(Usuario usuario);
     public NivelRespuestaDTO obtenerNivel(Usuario usuario);
+    public PreferenciaNotificacionDTO obtenerPreferenciaNotificaciones(Usuario usuario);
+    public PreferenciaNotificacionDTO actualizarPreferenciaNotificaciones(
+            Usuario usuario, PreferenciaNotificacionActualizarDTO dto);
 }

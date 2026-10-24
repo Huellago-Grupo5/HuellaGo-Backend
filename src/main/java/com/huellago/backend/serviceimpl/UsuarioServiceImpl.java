@@ -9,6 +9,8 @@ import com.huellago.backend.dtos.UsuarioPerfilDTO;
 import com.huellago.backend.dtos.EcoPuntosAccionDTO;
 import com.huellago.backend.dtos.EcoPuntosRespuestaDTO;
 import com.huellago.backend.dtos.NivelRespuestaDTO;
+import com.huellago.backend.dtos.PreferenciaNotificacionActualizarDTO;
+import com.huellago.backend.dtos.PreferenciaNotificacionDTO;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.Sesion;
 import com.huellago.backend.repositories.SesionRepository;
@@ -212,6 +214,38 @@ public class UsuarioServiceImpl implements UsuarioService {
                 puntosEnNivel,
                 100 - puntosEnNivel,
                 puntosEnNivel
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PreferenciaNotificacionDTO obtenerPreferenciaNotificaciones(
+            Usuario usuarioAutenticado) {
+        Usuario usuario = obtenerUsuarioActual(usuarioAutenticado);
+        return mapearPreferencia(usuario);
+    }
+
+    @Override
+    @Transactional
+    public PreferenciaNotificacionDTO actualizarPreferenciaNotificaciones(
+            Usuario usuarioAutenticado, PreferenciaNotificacionActualizarDTO dto) {
+        Usuario usuario = obtenerUsuarioActual(usuarioAutenticado);
+        usuario.setNotificacionesActivas(dto.getNotificacionesActivas());
+        usuario.setFechaActualizacion(LocalDateTime.now());
+        return mapearPreferencia(usuarioRepository.save(usuario));
+    }
+
+    private Usuario obtenerUsuarioActual(Usuario usuarioAutenticado) {
+        return usuarioRepository.findById(usuarioAutenticado.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+    }
+
+    private PreferenciaNotificacionDTO mapearPreferencia(Usuario usuario) {
+        return new PreferenciaNotificacionDTO(
+                usuario.getId(),
+                usuario.getNotificacionesActivas(),
+                usuario.getFechaActualizacion()
         );
     }
 
