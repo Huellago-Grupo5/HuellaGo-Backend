@@ -23,6 +23,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -179,6 +180,111 @@ class HabitoServiceImplTest {
 
         assertEquals(403, exception.getStatusCode().value());
         verify(habitoRepository, never()).save(any(Habito.class));
+    }
+
+    @Test
+    void actualizaCamposTextualesDeLasCuatroCategoriasSinInsertarFilas() {
+        String[][] casos = {
+                {"Transporte", "medio", "Auto", "Bus"},
+                {"Energia", "fuente", "Gas", "Solar"},
+                {"Alimentacion", "tipo", "Mixta", "Vegana"},
+                {"Residuos", "plasticos", "Alto", "Bajo"}
+        };
+        for (int i = 0; i < casos.length; i++) {
+            Habito habito = habito(10L + i, casos[i][0], casos[i][1], BigDecimal.ZERO, casos[i][2]);
+            when(habitoRepository.findById(10L + i)).thenReturn(Optional.of(habito));
+            when(habitoRepository.save(habito)).thenReturn(habito);
+            var respuesta = service.actualizar(10L + i, usuario,
+                    new com.huellago.backend.dtos.ActualizarHabitoDTO(casos[i][1], BigDecimal.ZERO, casos[i][3]));
+            assertEquals(casos[i][3], respuesta.getUnidad());
+            assertEquals(casos[i][1], respuesta.getNombre());
+            assertEquals(10L + i, respuesta.getId());
+            assertEquals(1L, respuesta.getUsuarioId());
+            assertTrue(respuesta.getFechaActualizacion() != null);
+            verify(habitoRepository).save(habito);
+        }
+    }
+
+    @Test
+    void actualizaNumerosCompatiblesConRecalculoYHu31() {
+        String[][] casos = {
+                {"Transporte", "kmSemana", "km/semana", "35.5"},
+                {"Transporte", "diasSemana", "dias/semana", "6"},
+                {"Energia", "personas", "personas", "3"},
+                {"Residuos", "reciclas", "boolean", "1"}
+        };
+        for (int i = 0; i < casos.length; i++) {
+            Habito habito = habito(20L + i, casos[i][0], casos[i][1], BigDecimal.ONE, casos[i][2]);
+            when(habitoRepository.findById(20L + i)).thenReturn(Optional.of(habito));
+            when(habitoRepository.save(habito)).thenReturn(habito);
+            var respuesta = service.actualizar(20L + i, usuario,
+                    new com.huellago.backend.dtos.ActualizarHabitoDTO(
+                            casos[i][1], new BigDecimal(casos[i][3]), casos[i][2]));
+            assertEquals(new BigDecimal(casos[i][3]), respuesta.getValor());
+            verify(habitoRepository).save(habito);
+        }
+    }
+
+    @Test
+    void rechazaNulosYCamposOmitidos() {
+        for (var dto : List.of(
+                new com.huellago.backend.dtos.ActualizarHabitoDTO(null, BigDecimal.ZERO, "Auto"),
+                new com.huellago.backend.dtos.ActualizarHabitoDTO("medio", null, "Auto"),
+                new com.huellago.backend.dtos.ActualizarHabitoDTO("medio", BigDecimal.ZERO, null))) {
+            assertEquals(400, assertThrows(ResponseStatusException.class,
+                    () -> service.actualizar(30L, usuario, dto)).getStatusCode().value());
+        }
+        verify(habitoRepository, never()).save(any(Habito.class));
+    }
+
+    @Test
+    void rechazaRenombrarHabitoYValoresInvalidosSinDuplicar() {
+        Habito habito = habito(40L, "Transporte", "medio", BigDecimal.ZERO, "Bus");
+        when(habitoRepository.findById(40L)).thenReturn(Optional.of(habito));
+        var invalidos = List.of(
+                new com.huellago.backend.dtos.ActualizarHabitoDTO("kmSemana", BigDecimal.ONE, "km/semana"),
+                new com.huellago.backend.dtos.ActualizarHabitoDTO("medio", BigDecimal.ONE, "Auto"),
+                new com.huellago.backend.dtos.ActualizarHabitoDTO("medio", BigDecimal.ZERO, "Avion"));
+        for (var dto : invalidos) {
+            assertEquals(400, assertThrows(ResponseStatusException.class,
+                    () -> service.actualizar(40L, usuario, dto)).getStatusCode().value());
+        }
+        assertEquals("medio", habito.getNombre());
+        verify(habitoRepository, never()).save(any(Habito.class));
+    }
+
+    @Test
+    void rechazaUnidadYEnterosInvalidos() {
+        Habito habito = habito(50L, "Transporte", "diasSemana", BigDecimal.ONE, "dias/semana");
+        when(habitoRepository.findById(50L)).thenReturn(Optional.of(habito));
+        for (var dto : List.of(
+                new com.huellago.backend.dtos.ActualizarHabitoDTO("diasSemana", new BigDecimal("1.5"), "dias/semana"),
+                new com.huellago.backend.dtos.ActualizarHabitoDTO("diasSemana", new BigDecimal("8"), "dias/semana"),
+                new com.huellago.backend.dtos.ActualizarHabitoDTO("diasSemana", BigDecimal.ONE, "personas"))) {
+            assertEquals(400, assertThrows(ResponseStatusException.class,
+                    () -> service.actualizar(50L, usuario, dto)).getStatusCode().value());
+        }
+        verify(habitoRepository, never()).save(any(Habito.class));
+    }
+
+    @Test
+    void devuelve404CuandoNoExiste() {
+        assertEquals(404, assertThrows(ResponseStatusException.class,
+                () -> service.actualizar(999L, usuario,
+                        new com.huellago.backend.dtos.ActualizarHabitoDTO("medio", BigDecimal.ZERO, "Bus")))
+                .getStatusCode().value());
+    }
+
+    private Habito habito(Long id, String categoria, String nombre, BigDecimal valor, String unidad) {
+        Habito habito = new Habito();
+        habito.setId(id);
+        habito.setUsuario(usuario);
+        habito.setCategoria(categoria(id, categoria));
+        habito.setNombre(nombre);
+        habito.setValor(valor);
+        habito.setUnidad(unidad);
+        habito.setFechaRegistro(java.time.LocalDateTime.now().minusDays(1));
+        return habito;
     }
 
     private CategoriaHabito categoria(Long id, String nombre) {

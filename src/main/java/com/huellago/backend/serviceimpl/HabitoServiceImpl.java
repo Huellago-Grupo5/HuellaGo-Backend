@@ -116,6 +116,7 @@ public class HabitoServiceImpl implements HabitoService {
     }
 
     @Override
+    @Transactional
     public HabitoRespuestaDTO actualizar(Long id, Usuario usuario, ActualizarHabitoDTO dto) {
         if (dto == null || dto.getNombre() == null || dto.getNombre().isBlank()
                 || dto.getValor() == null || dto.getUnidad() == null || dto.getUnidad().isBlank()) {
@@ -133,7 +134,6 @@ public class HabitoServiceImpl implements HabitoService {
         }
 
         validarCompatibilidad(habito, dto);
-        habito.setNombre(dto.getNombre().trim());
         habito.setValor(dto.getValor());
         habito.setUnidad(dto.getUnidad().trim());
         habito.setFechaActualizacion(LocalDateTime.now());
@@ -201,7 +201,9 @@ public class HabitoServiceImpl implements HabitoService {
     private void validarCompatibilidad(Habito habito, ActualizarHabitoDTO dto) {
         String categoria = normalizarCategoria(habito.getCategoria().getNombre());
         String nombre = dto.getNombre().trim().toLowerCase(Locale.ROOT);
+        String nombreActual = habito.getNombre() == null ? "" : habito.getNombre().toLowerCase(Locale.ROOT);
         BigDecimal valor = dto.getValor();
+        String unidad = dto.getUnidad().trim().toLowerCase(Locale.ROOT);
 
         Set<String> nombresPermitidos = switch (categoria) {
             case "transporte" -> Set.of("medio", "kmsemana", "diassemana");
@@ -211,27 +213,40 @@ public class HabitoServiceImpl implements HabitoService {
             default -> Set.of();
         };
 
-        if (!nombresPermitidos.contains(nombre)) {
+        if (!nombresPermitidos.contains(nombre) || !nombre.equals(nombreActual)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Nombre incompatible con la categoría del hábito");
+                    "El nombre debe coincidir con el hábito registrado en su categoría");
         }
 
-        if (Set.of("medio", "vivienda", "fuente", "tipo", "plasticos").contains(nombre)
-                && valor.compareTo(BigDecimal.ZERO) != 0) {
+        boolean entero = valor.stripTrailingZeros().scale() <= 0;
+        if ("diassemana".equals(nombre)
+                && (!entero || valor.compareTo(BigDecimal.ONE) < 0
+                || valor.compareTo(BigDecimal.valueOf(7)) > 0)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Los hábitos textuales deben tener valor 0");
+                    "diasSemana debe ser un número entero entre 1 y 7");
         }
-
-        if (Set.of("kmsemana", "diassemana", "personas").contains(nombre)
-                && valor.compareTo(BigDecimal.ZERO) <= 0) {
+        boolean valido = switch (nombre) {
+            case "medio" -> valor.signum() == 0
+                    && Set.of("bicicleta", "caminando", "bus", "auto", "moto").contains(unidad);
+            case "vivienda" -> valor.signum() == 0
+                    && Set.of("casa", "departamento").contains(unidad);
+            case "fuente" -> valor.signum() == 0
+                    && Set.of("electricidad", "gas", "solar").contains(unidad);
+            case "tipo" -> valor.signum() == 0
+                    && Set.of("vegana", "vegetariana", "mixta").contains(unidad);
+            case "plasticos" -> valor.signum() == 0
+                    && Set.of("bajo", "medio", "alto").contains(unidad);
+            case "kmsemana" -> valor.signum() > 0 && "km/semana".equals(unidad);
+            case "diassemana" -> entero && valor.signum() > 0
+                    && valor.compareTo(BigDecimal.valueOf(7)) <= 0 && "dias/semana".equals(unidad);
+            case "personas" -> entero && valor.signum() > 0 && "personas".equals(unidad);
+            case "reciclas" -> entero && (valor.signum() == 0 || valor.compareTo(BigDecimal.ONE) == 0)
+                    && "boolean".equals(unidad);
+            default -> false;
+        };
+        if (!valido) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "El valor debe ser positivo");
-        }
-
-        if ("reciclas".equals(nombre)
-                && !(valor.compareTo(BigDecimal.ZERO) == 0 || valor.compareTo(BigDecimal.ONE) == 0)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "El valor de reciclas debe ser 0 o 1");
+                    "Valor o unidad inválidos para " + habito.getNombre());
         }
     }
 
