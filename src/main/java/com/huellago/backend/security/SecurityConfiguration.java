@@ -1,5 +1,6 @@
 package com.huellago.backend.security;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,6 +37,7 @@ public class SecurityConfiguration {
         http.cors(Customizer.withDefaults());
         http.csrf(AbstractHttpConfigurer::disable);
         http.authorizeHttpRequests(authorizationRegistry -> authorizationRegistry
+                .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                 .requestMatchers("/auth/register", "/auth/login",
                         "/auth/recuperar-contrasena", "/auth/restablecer-contrasena").permitAll()
                 .anyRequest().authenticated()

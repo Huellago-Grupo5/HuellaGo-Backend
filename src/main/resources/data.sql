@@ -87,3 +87,13 @@ WHERE NOT EXISTS (
       AND h.categoria_id = c.id
       AND h.nombre = datos.nombre
 );
+
+INSERT INTO objetivos_ambientales (nombre, descripcion)
+SELECT datos.nombre, datos.descripcion
+FROM (VALUES
+    ('Reducir emisiones del transporte', 'Usar medios de transporte con menor impacto ambiental.'),
+    ('Ahorrar energia', 'Reducir el consumo de energia en el hogar.'),
+    ('Mejorar mi alimentacion', 'Elegir alimentos con menor huella ambiental.'),
+    ('Reducir y reciclar residuos', 'Disminuir la generacion de residuos y reciclar correctamente.')
+) AS datos(nombre, descripcion)
+WHERE NOT EXISTS (SELECT 1 FROM objetivos_ambientales o WHERE o.nombre = datos.nombre);
