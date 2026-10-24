@@ -15,9 +15,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @CrossOrigin("*")
@@ -52,7 +54,13 @@ public class RetosActivosController {
     }
 
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<Void> manejarResponseStatusException(ResponseStatusException exception) {
-        return ResponseEntity.status(exception.getStatusCode()).build();
+    public ResponseEntity<Map<String, String>> manejarResponseStatusException(ResponseStatusException exception) {
+        return ResponseEntity.status(exception.getStatusCode()).body(Map.of(
+                "mensaje", exception.getReason() == null ? "No se pudo procesar la participación" : exception.getReason()));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, String>> manejarJsonInvalido() {
+        return ResponseEntity.badRequest().body(Map.of("mensaje", "JSON o progreso inválido"));
     }
 }

@@ -6,6 +6,7 @@ import com.huellago.backend.entities.UsuarioReto;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.repository.query.Param;
 
 public interface UsuarioRetoRepository extends JpaRepository<UsuarioReto, Integer> {
 
@@ -15,6 +16,10 @@ public interface UsuarioRetoRepository extends JpaRepository<UsuarioReto, Intege
             Long usuarioId, String estado);
 
     Optional<UsuarioReto> findByIdAndUsuario_Id(Integer id, Long usuarioId);
+
+    @Query(value = "SELECT id FROM usuarios_retos WHERE id = :id AND usuario_id = :usuarioId FOR UPDATE",
+            nativeQuery = true)
+    Optional<Integer> bloquearParticipacion(@Param("id") Integer id, @Param("usuarioId") Long usuarioId);
 
     @Query("SELECT COUNT(ur) FROM UsuarioReto ur WHERE ur.usuario.id = :usuarioId AND LOWER(ur.estado) = 'activo'")
     public Long contarRetosActivosUsuario(Long usuarioId);

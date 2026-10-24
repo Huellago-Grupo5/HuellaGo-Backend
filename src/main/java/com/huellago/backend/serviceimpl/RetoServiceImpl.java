@@ -100,6 +100,7 @@ public class RetoServiceImpl implements RetoService {
     }
 
     @Override
+    @Transactional
     public UsuarioRetoRespuestaDTO actualizarProgreso(
             Integer usuarioRetoId, Long usuarioId, ActualizarProgresoDTO dto) {
         if (dto == null || dto.getProgreso() == null) {
@@ -112,12 +113,16 @@ public class RetoServiceImpl implements RetoService {
                     "El progreso debe estar entre 0 y 100");
         }
 
+        usuarioRetoRepository.bloquearParticipacion(usuarioRetoId, usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Participación no encontrada"));
         UsuarioReto usuarioReto = usuarioRetoRepository
                 .findByIdAndUsuario_Id(usuarioRetoId, usuarioId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Participación no encontrada"));
 
-        if (!"activo".equalsIgnoreCase(usuarioReto.getEstado())) {
+        if (!"activo".equalsIgnoreCase(usuarioReto.getEstado())
+                || usuarioReto.getFechaCompletado() != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "La participación no está activa");
         }
@@ -129,20 +134,29 @@ public class RetoServiceImpl implements RetoService {
     @Override
     @Transactional
     public UsuarioRetoRespuestaDTO completarReto(Integer usuarioRetoId, Long usuarioId) {
+        usuarioRetoRepository.bloquearParticipacion(usuarioRetoId, usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Participación no encontrada"));
         UsuarioReto usuarioReto = usuarioRetoRepository
                 .findByIdAndUsuario_Id(usuarioRetoId, usuarioId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Participación no encontrada"));
 
-        if (!"activo".equalsIgnoreCase(usuarioReto.getEstado())) {
+        if (!"activo".equalsIgnoreCase(usuarioReto.getEstado())
+                || usuarioReto.getFechaCompletado() != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "La participación ya está completada o no está activa");
         }
 
         if (usuarioReto.getProgreso() == null
-                || usuarioReto.getProgreso().compareTo(BigDecimal.valueOf(100)) < 0) {
+                || usuarioReto.getProgreso().compareTo(BigDecimal.valueOf(100)) != 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "El progreso debe ser 100 para completar el reto");
+        }
+
+        if (usuarioReto.getReto() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La participación no tiene un reto asociado");
         }
 
         usuarioReto.setEstado("completado");
