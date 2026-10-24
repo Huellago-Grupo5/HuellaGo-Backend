@@ -4,6 +4,7 @@ import com.huellago.backend.dtos.RetoRespuestaDTO;
 import com.huellago.backend.dtos.UsuarioRetoRespuestaDTO;
 import com.huellago.backend.dtos.ActualizarProgresoDTO;
 import com.huellago.backend.entities.Reto;
+import com.huellago.backend.entities.TipoReto;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.UsuarioReto;
 import com.huellago.backend.repositories.RetoRepository;
@@ -46,7 +47,7 @@ public class RetoServiceImpl implements RetoService {
         LocalDate hoy = LocalDate.now();
         return retoRepository.findByActivoTrueOrderByFechaInicioAsc()
                 .stream()
-                .filter(reto -> disponible(reto, hoy))
+                .filter(reto -> reto.getTipo() != TipoReto.COLECTIVO && disponible(reto, hoy))
                 .map(this::convertirADTO)
                 .toList();
     }
@@ -62,6 +63,11 @@ public class RetoServiceImpl implements RetoService {
         Reto reto = retoRepository.findById(retoId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Reto no encontrado"));
+
+        if (reto.getTipo() == TipoReto.COLECTIVO) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Use la ruta de participación colectiva");
+        }
 
         if (!disponible(reto, LocalDate.now())) {
             throw new ResponseStatusException(
@@ -124,6 +130,11 @@ public class RetoServiceImpl implements RetoService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Participación no encontrada"));
 
+        if (usuarioReto.getReto() != null && usuarioReto.getReto().getTipo() == TipoReto.COLECTIVO) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Use la ruta de progreso colectivo");
+        }
+
         if (!"activo".equalsIgnoreCase(usuarioReto.getEstado())
                 || usuarioReto.getFechaCompletado() != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -148,6 +159,11 @@ public class RetoServiceImpl implements RetoService {
                 .findByIdAndUsuario_Id(usuarioRetoId, usuarioId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Participación no encontrada"));
+
+        if (usuarioReto.getReto() != null && usuarioReto.getReto().getTipo() == TipoReto.COLECTIVO) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Los retos colectivos se cierran automáticamente sin recompensas individuales");
+        }
 
         if (!"activo".equalsIgnoreCase(usuarioReto.getEstado())
                 || usuarioReto.getFechaCompletado() != null) {

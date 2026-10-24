@@ -3,6 +3,7 @@ package com.huellago.backend.serviceimpl;
 import com.huellago.backend.dtos.ActualizarProgresoDTO;
 import com.huellago.backend.dtos.InsigniaRespuestaDTO;
 import com.huellago.backend.entities.Reto;
+import com.huellago.backend.entities.TipoReto;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.UsuarioReto;
 import com.huellago.backend.repositories.RetoRepository;
@@ -80,6 +81,21 @@ class RetoFinalizacionServiceImplTest {
         assertEquals(10, participacion.getUsuario().getEcoPuntos());
         verify(participaciones, never()).save(any());
         verifyNoInteractions(usuarios, insignias);
+    }
+
+    @Test
+    void retoColectivoNoPuedeUsarFinalizacionIndividualNiRecibirPuntos() {
+        UsuarioReto participacion = participacion();
+        participacion.getReto().setTipo(TipoReto.COLECTIVO);
+        participacion.setProgreso(BigDecimal.valueOf(100));
+        prepararPropietario(participacion);
+
+        assertEquals(HttpStatus.CONFLICT, assertThrows(ResponseStatusException.class,
+                () -> servicio.completarReto(29, 22L)).getStatusCode());
+        assertEquals(10, participacion.getUsuario().getEcoPuntos());
+        assertEquals("activo", participacion.getEstado());
+        verifyNoInteractions(usuarios, insignias);
+        verify(participaciones, never()).save(any());
     }
 
     @Test

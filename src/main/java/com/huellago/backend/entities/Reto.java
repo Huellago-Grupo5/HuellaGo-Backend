@@ -26,6 +26,9 @@ public class Reto {
     private LocalDate fechaInicio;
     private LocalDate fechaFin;
     private Boolean activo;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private TipoReto tipo = TipoReto.INDIVIDUAL;
 
     @ManyToOne
     @JoinColumn(name = "categoria_id")

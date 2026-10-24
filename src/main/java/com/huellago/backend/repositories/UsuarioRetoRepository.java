@@ -16,6 +16,12 @@ public interface UsuarioRetoRepository extends JpaRepository<UsuarioReto, Intege
             Long usuarioId, String estado);
 
     Optional<UsuarioReto> findByIdAndUsuario_Id(Integer id, Long usuarioId);
+    List<UsuarioReto> findByReto_Id(Integer retoId);
+
+    @Query(value = "SELECT reto_id FROM usuarios_retos WHERE id = :id AND usuario_id = :usuarioId",
+            nativeQuery = true)
+    Optional<Integer> buscarRetoIdDeParticipacion(@Param("id") Integer id,
+                                                  @Param("usuarioId") Long usuarioId);
 
     @Query(value = "SELECT id FROM usuarios_retos WHERE id = :id AND usuario_id = :usuarioId FOR UPDATE",
             nativeQuery = true)
