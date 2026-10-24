@@ -33,6 +33,9 @@ public class RetoServiceImpl implements RetoService {
     UsuarioRetoRepository usuarioRetoRepository;
 
     @Autowired
+    UsuarioRepository usuarioRepository;
+
+    @Autowired
     UsuarioService usuarioService;
 
     @Autowired
@@ -137,6 +140,10 @@ public class RetoServiceImpl implements RetoService {
         usuarioRetoRepository.bloquearParticipacion(usuarioRetoId, usuarioId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Participación no encontrada"));
+        // También serializa las recompensas de retos distintos del mismo usuario.
+        usuarioRepository.bloquearParaRecomendaciones(usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Usuario no encontrado"));
         UsuarioReto usuarioReto = usuarioRetoRepository
                 .findByIdAndUsuario_Id(usuarioRetoId, usuarioId)
                 .orElseThrow(() -> new ResponseStatusException(

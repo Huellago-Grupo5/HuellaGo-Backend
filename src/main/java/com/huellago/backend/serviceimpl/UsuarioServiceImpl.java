@@ -19,7 +19,6 @@ import com.huellago.backend.repositories.SesionRepository;
 import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.security.JwtUtilService;
 import com.huellago.backend.security.UserSecurity;
-import com.huellago.backend.services.InsigniaService;
 import com.huellago.backend.services.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -30,26 +29,16 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.Locale;
-import java.util.Map;
 import java.util.List;
 
 @Service
 public class UsuarioServiceImpl implements UsuarioService {
-
-    private static final Map<String, Integer> PUNTOS_ACCIONES = Map.of(
-            "RECICLAR", 10,
-            "USAR_BICICLETA", 15,
-            "AHORRAR_ENERGIA", 10
-    );
 
     @Autowired
     UsuarioRepository usuarioRepository;
 
     @Autowired
     JwtUtilService jwtUtilService;
-
-    @Autowired
-    InsigniaService insigniaService;
 
     @Autowired
     SesionRepository sesionRepository;
@@ -177,25 +166,9 @@ public class UsuarioServiceImpl implements UsuarioService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "La acción es obligatoria");
         }
-
-        String accion = dto.getAccion().trim().toUpperCase(Locale.ROOT);
-        Integer puntos = PUNTOS_ACCIONES.get(accion);
-        if (puntos == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Acción sostenible no válida");
-        }
-
-        int ecoPuntosActuales = usuario.getEcoPuntos() == null ? 0 : usuario.getEcoPuntos();
-        usuario.setEcoPuntos(ecoPuntosActuales + puntos);
-        Usuario usuarioActualizado = actualizarNivel(usuario);
-        insigniaService.evaluarYDesbloquearInsignias(usuarioActualizado);
-
-        return new EcoPuntosRespuestaDTO(
-                usuarioActualizado.getId(),
-                usuarioActualizado.getEcoPuntos(),
-                puntos,
-                accion
-        );
+        // No existe evidencia persistida ni una regla de validación para acciones autodeclaradas.
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "No se pueden otorgar eco-puntos por acciones sin verificación");
     }
 
     @Override

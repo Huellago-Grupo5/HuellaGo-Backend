@@ -6,6 +6,7 @@ import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.UsuarioReto;
 import com.huellago.backend.repositories.RetoRepository;
 import com.huellago.backend.repositories.UsuarioRetoRepository;
+import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.services.InsigniaService;
 import com.huellago.backend.services.UsuarioService;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import static org.mockito.Mockito.*;
 class RetoFinalizacionServiceImplTest {
     @Mock RetoRepository retos;
     @Mock UsuarioRetoRepository participaciones;
+    @Mock UsuarioRepository usuariosRepository;
     @Mock UsuarioService usuarios;
     @Mock InsigniaService insignias;
     @InjectMocks RetoServiceImpl servicio;
@@ -99,7 +101,9 @@ class RetoFinalizacionServiceImplTest {
     @Test
     void actualizarProgresoA100NoOtorgaRecompensas() {
         UsuarioReto participacion = participacion();
-        prepararPropietario(participacion);
+        when(participaciones.bloquearParticipacion(29, 22L)).thenReturn(Optional.of(29));
+        when(participaciones.findByIdAndUsuario_Id(29, 22L))
+                .thenReturn(Optional.of(participacion));
         when(participaciones.save(participacion)).thenReturn(participacion);
         var respuesta = servicio.actualizarProgreso(29, 22L,
                 new ActualizarProgresoDTO(BigDecimal.valueOf(100)));
@@ -108,6 +112,46 @@ class RetoFinalizacionServiceImplTest {
         assertNull(respuesta.getFechaCompletado());
         assertEquals(10, participacion.getUsuario().getEcoPuntos());
         verifyNoInteractions(usuarios, insignias);
+    }
+
+    @Test
+    void sumaRecompensasDeRetosDistintosAlSaldoAcumulado() {
+        UsuarioReto primera = participacion();
+        primera.setProgreso(BigDecimal.valueOf(100));
+        primera.getReto().setPuntosRecompensa(20);
+        prepararPropietario(primera);
+        when(usuarios.actualizarNivel(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+        when(participaciones.save(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        servicio.completarReto(29, 22L);
+        assertEquals(30, primera.getUsuario().getEcoPuntos());
+
+        UsuarioReto segunda = participacion();
+        segunda.setId(30);
+        segunda.setProgreso(BigDecimal.valueOf(100));
+        segunda.getUsuario().setEcoPuntos(30);
+        segunda.getReto().setPuntosRecompensa(15);
+        when(participaciones.bloquearParticipacion(30, 22L)).thenReturn(Optional.of(30));
+        when(participaciones.findByIdAndUsuario_Id(30, 22L)).thenReturn(Optional.of(segunda));
+
+        servicio.completarReto(30, 22L);
+        assertEquals(45, segunda.getUsuario().getEcoPuntos());
+        verify(usuariosRepository, times(2)).bloquearParaRecomendaciones(22L);
+        verify(usuarios, times(2)).actualizarNivel(any());
+    }
+
+    @Test
+    void falloAlPersistirRecompensaInterrumpeLaFinalizacionTransaccional() throws Exception {
+        UsuarioReto participacion = participacion();
+        participacion.setProgreso(BigDecimal.valueOf(100));
+        prepararPropietario(participacion);
+        when(usuarios.actualizarNivel(any())).thenThrow(new IllegalStateException("fallo de persistencia"));
+
+        assertThrows(IllegalStateException.class, () -> servicio.completarReto(29, 22L));
+        verify(participaciones, never()).save(any());
+        verifyNoInteractions(insignias);
+        assertNotNull(RetoServiceImpl.class.getMethod("completarReto", Integer.class, Long.class)
+                .getAnnotation(Transactional.class));
     }
 
     @Test
@@ -125,6 +169,10 @@ class RetoFinalizacionServiceImplTest {
                 .getAnnotation(Query.class);
         assertTrue(query.nativeQuery());
         assertTrue(query.value().contains("usuario_id = :usuarioId FOR UPDATE"));
+        Query bloqueoUsuario = UsuarioRepository.class
+                .getMethod("bloquearParaRecomendaciones", Long.class).getAnnotation(Query.class);
+        assertTrue(bloqueoUsuario.nativeQuery());
+        assertTrue(bloqueoUsuario.value().contains("FOR UPDATE"));
         assertNotNull(RetoServiceImpl.class.getMethod("completarReto", Integer.class, Long.class)
                 .getAnnotation(Transactional.class));
         assertNotNull(RetoServiceImpl.class.getMethod("actualizarProgreso", Integer.class,
@@ -133,6 +181,7 @@ class RetoFinalizacionServiceImplTest {
 
     private void prepararPropietario(UsuarioReto participacion) {
         when(participaciones.bloquearParticipacion(29, 22L)).thenReturn(Optional.of(29));
+        when(usuariosRepository.bloquearParaRecomendaciones(22L)).thenReturn(Optional.of(22L));
         when(participaciones.findByIdAndUsuario_Id(29, 22L))
                 .thenReturn(Optional.of(participacion));
     }
