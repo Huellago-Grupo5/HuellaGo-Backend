@@ -11,6 +11,8 @@ import com.huellago.backend.dtos.EcoPuntosRespuestaDTO;
 import com.huellago.backend.dtos.NivelRespuestaDTO;
 import com.huellago.backend.dtos.PreferenciaNotificacionActualizarDTO;
 import com.huellago.backend.dtos.PreferenciaNotificacionDTO;
+import com.huellago.backend.dtos.PrivacidadActualizarDTO;
+import com.huellago.backend.dtos.PrivacidadDTO;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.Sesion;
 import com.huellago.backend.repositories.SesionRepository;
@@ -245,6 +247,31 @@ public class UsuarioServiceImpl implements UsuarioService {
         return new PreferenciaNotificacionDTO(
                 usuario.getId(),
                 usuario.getNotificacionesActivas(),
+                usuario.getFechaActualizacion()
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PrivacidadDTO obtenerPrivacidad(Usuario usuarioAutenticado) {
+        Usuario usuario = obtenerUsuarioActual(usuarioAutenticado);
+        return mapearPrivacidad(usuario);
+    }
+
+    @Override
+    @Transactional
+    public PrivacidadDTO actualizarPrivacidad(
+            Usuario usuarioAutenticado, PrivacidadActualizarDTO dto) {
+        Usuario usuario = obtenerUsuarioActual(usuarioAutenticado);
+        usuario.setVisibilidadComunidad(dto.getVisibilidadComunidad());
+        usuario.setFechaActualizacion(LocalDateTime.now());
+        return mapearPrivacidad(usuarioRepository.save(usuario));
+    }
+
+    private PrivacidadDTO mapearPrivacidad(Usuario usuario) {
+        return new PrivacidadDTO(
+                usuario.getId(),
+                usuario.getVisibilidadComunidad(),
                 usuario.getFechaActualizacion()
         );
     }
