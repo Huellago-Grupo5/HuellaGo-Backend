@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @CrossOrigin("*")
@@ -42,7 +43,8 @@ public class RetoController {
     }
 
     @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<Void> manejarResponseStatusException(ResponseStatusException exception) {
-        return ResponseEntity.status(exception.getStatusCode()).build();
+    public ResponseEntity<Map<String, String>> manejarResponseStatusException(ResponseStatusException exception) {
+        return ResponseEntity.status(exception.getStatusCode()).body(Map.of(
+                "mensaje", exception.getReason() == null ? "No se pudo aceptar el reto" : exception.getReason()));
     }
 }

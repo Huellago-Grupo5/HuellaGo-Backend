@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -39,21 +40,29 @@ public class RetoServiceImpl implements RetoService {
 
     @Override
     public List<RetoRespuestaDTO> listarRetosActivos() {
+        LocalDate hoy = LocalDate.now();
         return retoRepository.findByActivoTrueOrderByFechaInicioAsc()
                 .stream()
+                .filter(reto -> disponible(reto, hoy))
                 .map(this::convertirADTO)
                 .toList();
     }
 
     @Override
+    @Transactional
     public UsuarioRetoRespuestaDTO aceptarReto(Integer retoId, Usuario usuario) {
+        if (usuario == null || usuario.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Se requiere autenticación");
+        }
+        retoRepository.bloquearParaAceptacion(retoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reto no encontrado"));
         Reto reto = retoRepository.findById(retoId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Reto no encontrado"));
 
-        if (!Boolean.TRUE.equals(reto.getActivo())) {
+        if (!disponible(reto, LocalDate.now())) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "El reto no está activo");
+                    HttpStatus.CONFLICT, "El reto no está disponible en la fecha actual");
         }
 
         if (usuarioRetoRepository.existsByUsuario_IdAndReto_Id(usuario.getId(), retoId)) {
@@ -69,7 +78,16 @@ public class RetoServiceImpl implements RetoService {
         usuarioReto.setFechaAceptacion(LocalDateTime.now());
         usuarioReto.setFechaCompletado(null);
 
-        return convertirARespuesta(usuarioRetoRepository.save(usuarioReto));
+        return convertirARespuesta(usuarioRetoRepository.saveAndFlush(usuarioReto));
+    }
+
+    private boolean disponible(Reto reto, LocalDate hoy) {
+        LocalDate inicio = reto.getFechaInicio();
+        LocalDate fin = reto.getFechaFin();
+        return Boolean.TRUE.equals(reto.getActivo())
+                && (inicio == null || !hoy.isBefore(inicio))
+                && (fin == null || !hoy.isAfter(fin))
+                && (inicio == null || fin == null || !inicio.isAfter(fin));
     }
 
     @Override
