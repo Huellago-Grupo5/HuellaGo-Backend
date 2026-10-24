@@ -3,8 +3,12 @@ package com.huellago.backend.repositories;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import com.huellago.backend.entities.UsuarioRecomendacionIA;
+import java.util.Optional;
 
 public interface UsuarioRecomendacionIARepository extends JpaRepository<UsuarioRecomendacionIA, Integer> {
+
+    Optional<UsuarioRecomendacionIA> findFirstByUsuario_IdAndRecomendacionIA_IdOrderByIdAsc(
+            Long usuarioId, Integer recomendacionId);
 
     @Query("SELECT COUNT(ur) FROM UsuarioRecomendacionIA ur WHERE ur.usuario.id = :usuarioId AND LOWER(ur.estado) = 'pendiente'")
     public Long contarRecomendacionesPendientesUsuario(Long usuarioId);
