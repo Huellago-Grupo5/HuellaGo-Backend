@@ -1,5 +1,6 @@
 package com.huellago.backend.controllers;
 
+import com.huellago.backend.dtos.NivelRespuestaDTO;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.repositories.SesionRepository;
 import com.huellago.backend.security.JwtRequestFilter;
@@ -29,6 +30,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -66,6 +68,26 @@ class EcoPuntosAccionControllerIntegrationTest {
                         .contentType("application/json")
                         .content("{\"accion\":\"RECICLAR\"}"))
                 .andExpect(status().isForbidden());
+        verifyNoInteractions(usuarios);
+    }
+
+    @Test
+    void consultaNivelYFaltanteDelUsuarioAutenticado() throws Exception {
+        when(usuarios.obtenerNivel(argThat(u -> u.getId().equals(22L))))
+                .thenReturn(new NivelRespuestaDTO(22L, 30, 1, 30, 70, 30));
+
+        mvc.perform(get("/usuarios/me/nivel").with(authentication(autenticacion())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usuarioId").value(22))
+                .andExpect(jsonPath("$.ecoPuntos").value(30))
+                .andExpect(jsonPath("$.nivel").value(1))
+                .andExpect(jsonPath("$.puntosParaSiguienteNivel").value(70));
+        verify(usuarios).obtenerNivel(argThat(u -> u.getId().equals(22L)));
+    }
+
+    @Test
+    void consultaDeNivelSinJwtSeRechaza() throws Exception {
+        mvc.perform(get("/usuarios/me/nivel")).andExpect(status().isForbidden());
         verifyNoInteractions(usuarios);
     }
 

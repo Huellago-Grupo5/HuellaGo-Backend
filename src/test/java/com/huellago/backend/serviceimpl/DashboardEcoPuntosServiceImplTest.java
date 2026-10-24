@@ -33,12 +33,14 @@ class DashboardEcoPuntosServiceImplTest {
         Usuario usuario = new Usuario();
         usuario.setId(22L);
         usuario.setEcoPuntos(35);
+        usuario.setNivel(1);
         when(usuarios.findById(22L)).thenReturn(Optional.of(usuario));
 
         var resultado = dashboard.obtenerDashboard(22L);
 
         assertEquals(22L, resultado.getUsuarioId());
         assertEquals(35, resultado.getEcoPuntos());
+        assertEquals(1, resultado.getNivel());
         verify(usuarios).findById(22L);
     }
 
