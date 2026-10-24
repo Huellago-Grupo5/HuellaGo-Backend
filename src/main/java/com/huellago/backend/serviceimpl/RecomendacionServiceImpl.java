@@ -3,6 +3,7 @@ package com.huellago.backend.serviceimpl;
 import com.huellago.backend.dtos.GeneracionRecomendacionesDTO;
 import com.huellago.backend.dtos.ConversionRecomendacionDTO;
 import com.huellago.backend.dtos.RecomendacionPersonalizadaDTO;
+import com.huellago.backend.dtos.RecomendacionCompletadaDTO;
 import com.huellago.backend.entities.*;
 import com.huellago.backend.repositories.*;
 import com.huellago.backend.services.RecomendacionService;
@@ -37,6 +38,60 @@ public class RecomendacionServiceImpl implements RecomendacionService {
     RetoRepository retoRepository;
     @Autowired
     UsuarioRetoRepository usuarioRetoRepository;
+
+    @Override
+    @Transactional
+    public RecomendacionCompletadaDTO completar(Integer asociacionId, Usuario autenticado) {
+        Long usuarioId = identidad(autenticado);
+        if (asociacionId == null || asociacionId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "El identificador de la recomendación debe ser positivo");
+        }
+        usuarioRecomendacionIARepository.bloquearPropia(asociacionId, usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Recomendación no encontrada para el usuario"));
+        UsuarioRecomendacionIA asociacion = usuarioRecomendacionIARepository
+                .findByIdAndUsuario_Id(asociacionId, usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Recomendación no encontrada para el usuario"));
+        if ("completado".equalsIgnoreCase(asociacion.getEstado())
+                || asociacion.getFechaCompletado() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "La recomendación ya fue completada");
+        }
+        if (!"pendiente".equalsIgnoreCase(asociacion.getEstado())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "El estado de la recomendación no permite completarla");
+        }
+        asociacion.setEstado("completado");
+        asociacion.setFechaCompletado(LocalDateTime.now());
+        return completadaDTO(usuarioRecomendacionIARepository.saveAndFlush(asociacion));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RecomendacionCompletadaDTO> historialCompletadas(Usuario autenticado) {
+        return usuarioRecomendacionIARepository
+                .findByUsuario_IdAndEstadoIgnoreCaseOrderByFechaCompletadoDescIdDesc(
+                        identidad(autenticado), "completado")
+                .stream().map(this::completadaDTO).toList();
+    }
+
+    private Long identidad(Usuario autenticado) {
+        if (autenticado == null || autenticado.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Se requiere autenticación");
+        }
+        return autenticado.getId();
+    }
+
+    private RecomendacionCompletadaDTO completadaDTO(UsuarioRecomendacionIA asociacion) {
+        RecomendacionIA recomendacion = asociacion.getRecomendacionIA();
+        return new RecomendacionCompletadaDTO(asociacion.getId(),
+                recomendacion == null ? null : recomendacion.getId(),
+                recomendacion == null ? null : recomendacion.getTitulo(),
+                recomendacion == null ? null : recomendacion.getDescripcion(),
+                asociacion.getEstado(), asociacion.getFechaGeneracion(), asociacion.getFechaCompletado());
+    }
 
     @Override
     @Transactional

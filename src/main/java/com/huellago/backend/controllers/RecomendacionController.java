@@ -2,6 +2,13 @@ package com.huellago.backend.controllers;
 
 import com.huellago.backend.dtos.GeneracionRecomendacionesDTO;
 import com.huellago.backend.dtos.ConversionRecomendacionDTO;
+import com.huellago.backend.dtos.RecomendacionCompletadaDTO;
+import java.util.List;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.dao.DataAccessException;
+import org.springframework.transaction.TransactionException;
 import com.huellago.backend.security.UserSecurity;
 import com.huellago.backend.services.RecomendacionService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +43,30 @@ public class RecomendacionController {
             @PathVariable Integer id, @AuthenticationPrincipal UserSecurity userSecurity) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(recomendacionService.convertirEnReto(id, userSecurity.getUser()));
+    }
+
+    @PutMapping("/{id}/completar")
+    public ResponseEntity<RecomendacionCompletadaDTO> completar(
+            @PathVariable Integer id, @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(recomendacionService.completar(id, userSecurity.getUser()));
+    }
+
+    @GetMapping("/historial")
+    public ResponseEntity<List<RecomendacionCompletadaDTO>> historial(
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(recomendacionService.historialCompletadas(userSecurity.getUser()));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, String>> manejarIdentificadorInvalido() {
+        return ResponseEntity.badRequest().body(Map.of("mensaje",
+                "El identificador de la recomendación debe ser un número entero válido"));
+    }
+
+    @ExceptionHandler({DataAccessException.class, TransactionException.class})
+    public ResponseEntity<Map<String, String>> manejarPersistencia() {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("mensaje",
+                "No se pudo procesar la recomendación. Intenta nuevamente más tarde"));
     }
 
     @ExceptionHandler(ResponseStatusException.class)
