@@ -1,6 +1,7 @@
 package com.huellago.backend.serviceimpl;
 
 import com.huellago.backend.dtos.ActualizarProgresoDTO;
+import com.huellago.backend.dtos.InsigniaRespuestaDTO;
 import com.huellago.backend.entities.Reto;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.UsuarioReto;
@@ -21,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -43,6 +45,10 @@ class RetoFinalizacionServiceImplTest {
         prepararPropietario(participacion);
         when(usuarios.actualizarNivel(participacion.getUsuario()))
                 .thenReturn(participacion.getUsuario());
+        when(insignias.evaluarYDesbloquearInsignias(participacion.getUsuario()))
+                .thenReturn(List.of(new InsigniaRespuestaDTO(1, "Primer paso verde",
+                        "Insignia por puntos", "/img/primer-paso-verde.png", 10,
+                        LocalDateTime.now(), true)));
         when(participaciones.save(participacion)).thenReturn(participacion);
 
         var respuesta = servicio.completarReto(29, 22L);
@@ -56,6 +62,8 @@ class RetoFinalizacionServiceImplTest {
         assertEquals(aceptacion, respuesta.getFechaAceptacion());
         assertEquals(aceptacion, participacion.getFechaAceptacion());
         assertEquals(110, participacion.getUsuario().getEcoPuntos());
+        assertEquals(1, respuesta.getInsigniasDesbloqueadas().size());
+        assertEquals("Primer paso verde", respuesta.getInsigniasDesbloqueadas().getFirst().getNombre());
         verify(participaciones).save(participacion);
         verify(usuarios).actualizarNivel(participacion.getUsuario());
         verify(insignias).evaluarYDesbloquearInsignias(participacion.getUsuario());

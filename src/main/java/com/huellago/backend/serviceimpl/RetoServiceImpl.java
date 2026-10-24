@@ -176,9 +176,11 @@ public class RetoServiceImpl implements RetoService {
                 ? 0 : usuarioReto.getReto().getPuntosRecompensa();
         usuarioReto.getUsuario().setEcoPuntos(puntosActuales + puntosRecompensa);
         Usuario usuarioActualizado = usuarioService.actualizarNivel(usuarioReto.getUsuario());
-        insigniaService.evaluarYDesbloquearInsignias(usuarioActualizado);
+        var insigniasDesbloqueadas = insigniaService.evaluarYDesbloquearInsignias(usuarioActualizado);
 
-        return convertirARespuesta(usuarioRetoRepository.save(usuarioReto));
+        UsuarioRetoRespuestaDTO respuesta = convertirARespuesta(usuarioRetoRepository.save(usuarioReto));
+        respuesta.setInsigniasDesbloqueadas(insigniasDesbloqueadas);
+        return respuesta;
     }
 
     private UsuarioRetoRespuestaDTO convertirARespuesta(UsuarioReto usuarioReto) {

@@ -16,4 +16,5 @@ public class InsigniaRespuestaDTO {
     private String imagenUrl;
     private Integer puntosRequeridos;
     private LocalDateTime fechaObtencion;
+    private Boolean desbloqueada;
 }

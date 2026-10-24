@@ -12,7 +12,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class InsigniaServiceImpl implements InsigniaService {
@@ -25,8 +29,9 @@ public class InsigniaServiceImpl implements InsigniaService {
 
     @Override
     @Transactional
-    public void evaluarYDesbloquearInsignias(Usuario usuario) {
+    public List<InsigniaRespuestaDTO> evaluarYDesbloquearInsignias(Usuario usuario) {
         int ecoPuntos = usuario.getEcoPuntos() == null ? 0 : usuario.getEcoPuntos();
+        List<InsigniaRespuestaDTO> nuevas = new ArrayList<>();
 
         for (Insignia insignia : insigniaRepository.findAll()) {
             int puntosRequeridos = insignia.getPuntosRequeridos() == null
@@ -38,19 +43,28 @@ public class InsigniaServiceImpl implements InsigniaService {
                 usuarioInsignia.setUsuario(usuario);
                 usuarioInsignia.setInsignia(insignia);
                 usuarioInsignia.setFechaObtencion(LocalDateTime.now());
-                usuarioInsigniaRepository.save(usuarioInsignia);
+                nuevas.add(convertirADTO(usuarioInsigniaRepository.save(usuarioInsignia)));
             }
         }
+        return nuevas;
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public List<InsigniaRespuestaDTO> obtenerInsignias(Usuario usuario) {
-        evaluarYDesbloquearInsignias(usuario);
-        return usuarioInsigniaRepository
-                .findByUsuario_IdOrderByFechaObtencionDesc(usuario.getId())
-                .stream()
-                .map(this::convertirADTO)
+        Map<Integer, UsuarioInsignia> obtenidas = usuarioInsigniaRepository
+                .findByUsuario_IdOrderByFechaObtencionDesc(usuario.getId()).stream()
+                .collect(Collectors.toMap(ui -> ui.getInsignia().getId(),
+                        Function.identity(), (primera, repetida) -> primera));
+        return insigniaRepository.findAll().stream()
+                .map(insignia -> {
+                    UsuarioInsignia obtenida = obtenidas.get(insignia.getId());
+                    return new InsigniaRespuestaDTO(insignia.getId(), insignia.getNombre(),
+                            insignia.getDescripcion(), insignia.getImagenUrl(),
+                            insignia.getPuntosRequeridos(),
+                            obtenida == null ? null : obtenida.getFechaObtencion(),
+                            obtenida != null);
+                })
                 .toList();
     }
 
@@ -62,7 +76,8 @@ public class InsigniaServiceImpl implements InsigniaService {
                 insignia.getDescripcion(),
                 insignia.getImagenUrl(),
                 insignia.getPuntosRequeridos(),
-                usuarioInsignia.getFechaObtencion()
+                usuarioInsignia.getFechaObtencion(),
+                true
         );
     }
 }
