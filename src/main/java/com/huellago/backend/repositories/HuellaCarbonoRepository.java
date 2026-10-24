@@ -18,13 +18,13 @@ public interface HuellaCarbonoRepository extends JpaRepository<HuellaCarbono, Lo
 
     public List<HuellaCarbono> findByUsuario_IdOrderByFechaCalculoDescIdDesc(Long usuarioId);
 
-    public HuellaCarbono findTopByUsuario_IdAndFechaCalculoBetweenOrderByFechaCalculoDesc(
+    public HuellaCarbono findTopByUsuario_IdAndFechaCalculoBetweenOrderByFechaCalculoDescIdDesc(
             Long usuarioId, LocalDateTime inicio, LocalDateTime fin);
 
     @Query("SELECT COUNT(h) FROM HuellaCarbono h WHERE h.usuario.id = :usuarioId")
     public Long contarHuellasUsuario(Long usuarioId);
 
-    @Query(value = "SELECT co2_total FROM huellas_carbono WHERE usuario_id = :usuarioId ORDER BY fecha_calculo DESC LIMIT 1", nativeQuery = true)
+    @Query(value = "SELECT co2_total FROM huellas_carbono WHERE usuario_id = :usuarioId ORDER BY fecha_calculo DESC NULLS LAST, id DESC LIMIT 1", nativeQuery = true)
     public java.math.BigDecimal buscarHuellaActual_SQL(Long usuarioId);
 
     @Query(value = """
