@@ -211,16 +211,28 @@ public class RecomendacionServiceImpl implements RecomendacionService {
 
         BigDecimal mayorEmision = emisiones.values().stream()
                 .max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
+        Set<Integer> origenesRealizados = new HashSet<>();
+        usuarioRetoRepository.findByUsuario_IdAndEstadoIgnoreCaseOrderByFechaAceptacionDesc(
+                        usuarioId, "completado").stream()
+                .filter(p -> p.getReto() != null && p.getReto().getRecomendacionOrigen() != null)
+                .forEach(p -> origenesRealizados.add(p.getReto().getRecomendacionOrigen().getId()));
         List<RecomendacionPersonalizadaDTO> recomendaciones = new ArrayList<>();
-        for (Accion accion : acciones) {
+        for (Accion original : acciones) {
+            BigDecimal emision = emisiones.get(original.categoria());
+            boolean mayorImpacto = emision != null && emision.signum() > 0
+                    && emision.compareTo(mayorEmision) == 0;
+            Accion accion = mayorImpacto ? enfocarMayorImpacto(original) : original;
             RecomendacionIA recomendacion = obtenerCatalogo(accion);
             UsuarioRecomendacionIA asociacion = usuarioRecomendacionIARepository
                     .findFirstByUsuario_IdAndRecomendacionIA_IdOrderByIdAsc(
                             usuarioId, recomendacion.getId())
                     .orElseGet(() -> asociar(usuario, recomendacion));
-            BigDecimal emision = emisiones.get(accion.categoria());
-            String prioridad = emision != null && emision.signum() > 0
-                    && emision.compareTo(mayorEmision) == 0 ? "ALTA" : "MEDIA";
+            if (asociacion.getFechaCompletado() != null
+                    || "completado".equalsIgnoreCase(asociacion.getEstado())
+                    || origenesRealizados.contains(asociacion.getId())) {
+                continue;
+            }
+            String prioridad = mayorImpacto ? "ALTA" : "MEDIA";
             recomendaciones.add(new RecomendacionPersonalizadaDTO(
                     asociacion.getId(), recomendacion.getId(), accion.categoria().nombre,
                     recomendacion.getTitulo(), recomendacion.getDescripcion(), accion.motivo(),
@@ -228,10 +240,12 @@ public class RecomendacionServiceImpl implements RecomendacionService {
         }
 
         String estado = acciones.isEmpty() ? "DATOS_INSUFICIENTES"
+                : recomendaciones.isEmpty() ? "SIN_SUGERENCIAS_NUEVAS"
                 : faltantes.isEmpty() ? "GENERADAS" : "PARCIALES";
         String mensaje = switch (estado) {
             case "DATOS_INSUFICIENTES" -> "Completa los datos indicados para recibir recomendaciones confiables";
             case "PARCIALES" -> "Recomendaciones basadas en las categorías completas; revisa los datos faltantes";
+            case "SIN_SUGERENCIAS_NUEVAS" -> "Las acciones recomendadas ya se realizaron; se conserva tu historial";
             default -> "Recomendaciones personalizadas mediante reglas sobre tus hábitos registrados";
         };
         return new GeneracionRecomendacionesDTO(usuarioId, "REGLAS_DETERMINISTAS", estado,
@@ -239,6 +253,27 @@ public class RecomendacionServiceImpl implements RecomendacionService {
                 usarHuella ? huella.getId() : null, usarHuella ? huella.getFechaCalculo() : null,
                 usarHuella ? "kg CO2e" : null, usarHuella ? "semanal" : null,
                 faltantes, advertencias, recomendaciones);
+    }
+
+    /** La categoría de mayor emisión positiva cambia la acción propuesta, no solo su orden.
+     *  No se asignan porcentajes de ahorro ni se infieren cambios de hábitos a partir de retos. */
+    private Accion enfocarMayorImpacto(Accion accion) {
+        String titulo = switch (accion.categoria()) {
+            case TRANSPORTE -> "Agrupa trayectos en tu principal fuente de emisiones";
+            case ENERGIA -> "Identifica consumos evitables en tu principal fuente de emisiones";
+            case ALIMENTACION -> "Planifica compras en tu principal fuente de emisiones";
+            case RESIDUOS -> "Evita desechables en tu principal fuente de emisiones";
+        };
+        String paso = switch (accion.categoria()) {
+            case TRANSPORTE -> "Antes de salir, agrupa los destinos cercanos y elimina desplazamientos evitables.";
+            case ENERGIA -> "Haz una lista de equipos que quedan encendidos sin uso y acuerda cuándo apagarlos.";
+            case ALIMENTACION -> "Revisa tus alimentos disponibles y prepara una lista de compras ajustada al menú.";
+            case RESIDUOS -> "Identifica los envases desechables que más utilizas y elige una alternativa reutilizable.";
+        };
+        // El título incluye la acción base para conservar la personalización de cada hábito.
+        return new Accion(accion.categoria(), accion.entidadCategoria(),
+                titulo + ": " + accion.titulo(), accion.descripcion() + " " + paso,
+                accion.motivo() + " Esta categoría tiene la mayor emisión positiva del último cálculo vigente.");
     }
 
     private Map<Categoria, Map<String, Habito>> seleccionarHabitos(List<Habito> habitos) {

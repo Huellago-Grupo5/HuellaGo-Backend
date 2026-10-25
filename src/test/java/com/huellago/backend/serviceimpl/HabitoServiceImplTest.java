@@ -33,6 +33,7 @@ import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class HabitoServiceImplTest {
+    @Mock org.springframework.context.ApplicationEventPublisher eventos;
 
     @Mock
     HabitoRepository habitoRepository;
@@ -122,6 +123,7 @@ class HabitoServiceImplTest {
 
         assertEquals(10L, resultado.getCategoriaId());
         verify(habitoRepository, org.mockito.Mockito.times(3)).save(any(Habito.class));
+        verify(eventos).publishEvent(new com.huellago.backend.events.InformacionAmbientalActualizada(1L));
     }
 
     @Test
@@ -161,6 +163,7 @@ class HabitoServiceImplTest {
 
         assertEquals(new BigDecimal("150"), habito.getValor());
         verify(habitoRepository).save(habito);
+        verify(eventos).publishEvent(new com.huellago.backend.events.InformacionAmbientalActualizada(1L));
     }
 
     @Test
@@ -214,7 +217,8 @@ class HabitoServiceImplTest {
                 {"Residuos", "reciclas", "boolean", "1"}
         };
         for (int i = 0; i < casos.length; i++) {
-            Habito habito = habito(20L + i, casos[i][0], casos[i][1], BigDecimal.ONE, casos[i][2]);
+            Habito habito = habito(20L + i, casos[i][0], casos[i][1],
+                    "reciclas".equals(casos[i][1]) ? BigDecimal.ZERO : BigDecimal.ONE, casos[i][2]);
             when(habitoRepository.findById(20L + i)).thenReturn(Optional.of(habito));
             when(habitoRepository.save(habito)).thenReturn(habito);
             var respuesta = service.actualizar(20L + i, usuario,
@@ -273,6 +277,19 @@ class HabitoServiceImplTest {
                 () -> service.actualizar(999L, usuario,
                         new com.huellago.backend.dtos.ActualizarHabitoDTO("medio", BigDecimal.ZERO, "Bus")))
                 .getStatusCode().value());
+    }
+
+    @Test
+    void repetirDatosSinVariacionesNoInvalidaHuellaNiPublicaRefresco() {
+        Habito habito = habito(70L, "Transporte", "kmSemana", new BigDecimal("100"), "km/semana");
+        var fecha = java.time.LocalDateTime.of(2026, 1, 1, 10, 0);
+        habito.setFechaActualizacion(fecha);
+        when(habitoRepository.findById(70L)).thenReturn(Optional.of(habito));
+        var respuesta = service.actualizar(70L, usuario,
+                new com.huellago.backend.dtos.ActualizarHabitoDTO("kmSemana", new BigDecimal("100.00"), "km/semana"));
+        assertEquals(fecha, respuesta.getFechaActualizacion());
+        verify(habitoRepository, never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(eventos);
     }
 
     private Habito habito(Long id, String categoria, String nombre, BigDecimal valor, String unidad) {

@@ -13,6 +13,8 @@ import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.services.RetoService;
 import com.huellago.backend.services.UsuarioService;
 import com.huellago.backend.services.InsigniaService;
+import com.huellago.backend.events.InformacionAmbientalActualizada;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,9 @@ import java.util.List;
 
 @Service
 public class RetoServiceImpl implements RetoService {
+
+    @Autowired
+    ApplicationEventPublisher eventos;
 
     @Autowired
     RetoRepository retoRepository;
@@ -201,6 +206,7 @@ public class RetoServiceImpl implements RetoService {
 
         UsuarioRetoRespuestaDTO respuesta = convertirARespuesta(usuarioRetoRepository.save(usuarioReto));
         respuesta.setInsigniasDesbloqueadas(insigniasDesbloqueadas);
+        eventos.publishEvent(new InformacionAmbientalActualizada(usuarioId));
         return respuesta;
     }
 

@@ -26,6 +26,7 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class RetoColectivoServiceImplTest {
+    @Mock org.springframework.context.ApplicationEventPublisher eventos;
     @Mock RetoRepository retos;
     @Mock UsuarioRetoRepository participaciones;
     @Mock ResultadoRetoColectivoRepository resultados;
@@ -137,6 +138,7 @@ class RetoColectivoServiceImplTest {
         assertEquals(2, cerrado.getParticipantes());
         assertEquals(0, cerrado.getProgresoFinal().compareTo(BigDecimal.valueOf(100)));
         assertNotNull(cerrado.getFechaCierre());
+        verify(eventos).publishEvent(new com.huellago.backend.events.InformacionAmbientalActualizada(List.of(22L, 33L)));
 
         when(resultados.existsByReto_Id(7)).thenReturn(true);
         when(resultados.findByReto_Id(7)).thenReturn(Optional.of(cerrado));

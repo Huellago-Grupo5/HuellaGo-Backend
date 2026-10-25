@@ -12,6 +12,8 @@ import com.huellago.backend.repositories.HabitoRepository;
 import com.huellago.backend.repositories.HuellaCarbonoRepository;
 import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.services.HuellaCarbonoService;
+import com.huellago.backend.events.InformacionAmbientalActualizada;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -34,6 +36,9 @@ import java.util.Set;
 
 @Service
 public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
+
+    @Autowired
+    ApplicationEventPublisher eventos;
 
     private static final String UNIDAD_HUELLA = "kg CO2e";
     private static final String PERIODO_HUELLA = "semanal";
@@ -112,7 +117,9 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
         huellaCarbono.setCo2Total(co2Total);
         huellaCarbono.setFechaCalculo(java.time.LocalDateTime.now());
 
-        return convertirADTO(huellaCarbonoRepository.save(huellaCarbono));
+        HuellaCarbonoRespuestaDTO respuesta = convertirADTO(huellaCarbonoRepository.save(huellaCarbono));
+        eventos.publishEvent(new InformacionAmbientalActualizada(usuarioId));
+        return respuesta;
     }
 
     @Override

@@ -31,6 +31,7 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class RetoFinalizacionServiceImplTest {
+    @Mock org.springframework.context.ApplicationEventPublisher eventos;
     @Mock RetoRepository retos;
     @Mock UsuarioRetoRepository participaciones;
     @Mock UsuarioRepository usuariosRepository;
@@ -68,6 +69,7 @@ class RetoFinalizacionServiceImplTest {
         verify(participaciones).save(participacion);
         verify(usuarios).actualizarNivel(participacion.getUsuario());
         verify(insignias).evaluarYDesbloquearInsignias(participacion.getUsuario());
+        verify(eventos).publishEvent(new com.huellago.backend.events.InformacionAmbientalActualizada(22L));
     }
 
     @Test

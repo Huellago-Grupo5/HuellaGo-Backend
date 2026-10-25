@@ -15,6 +15,8 @@ import com.huellago.backend.repositories.CategoriaHabitoRepository;
 import com.huellago.backend.repositories.HabitoRepository;
 import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.services.HabitoService;
+import com.huellago.backend.events.InformacionAmbientalActualizada;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,9 @@ import java.util.Locale;
 
 @Service
 public class HabitoServiceImpl implements HabitoService {
+
+    @Autowired
+    ApplicationEventPublisher eventos;
 
     @Autowired
     HabitoRepository habitoRepository;
@@ -53,6 +58,7 @@ public class HabitoServiceImpl implements HabitoService {
         guardarHabito(usuario, categoria, "medio", BigDecimal.ZERO, dto.getMedio());
         guardarHabito(usuario, categoria, "kmSemana", dto.getKmSemana(), "km/semana");
         guardarHabito(usuario, categoria, "diasSemana", BigDecimal.valueOf(dto.getDiasSemana()), "dias/semana");
+        eventos.publishEvent(new InformacionAmbientalActualizada(usuario.getId()));
 
         return new TransporteRespuestaDTO(
                 usuario.getId(),
@@ -77,6 +83,7 @@ public class HabitoServiceImpl implements HabitoService {
         guardarHabito(usuario, categoria, "vivienda", BigDecimal.ZERO, dto.getVivienda());
         guardarHabito(usuario, categoria, "personas", BigDecimal.valueOf(dto.getPersonas()), "personas");
         guardarHabito(usuario, categoria, "fuente", BigDecimal.ZERO, dto.getFuente());
+        eventos.publishEvent(new InformacionAmbientalActualizada(usuario.getId()));
 
         return new EnergiaRespuestaDTO(
                 usuario.getId(),
@@ -104,6 +111,7 @@ public class HabitoServiceImpl implements HabitoService {
         guardarHabito(usuario, residuos, "plasticos", BigDecimal.ZERO, dto.getPlasticos());
         guardarHabito(usuario, residuos, "reciclas",
                 dto.getReciclas() ? BigDecimal.ONE : BigDecimal.ZERO, "boolean");
+        eventos.publishEvent(new InformacionAmbientalActualizada(usuario.getId()));
 
         return new AlimentacionResiduosRespuestaDTO(
                 usuario.getId(),
@@ -134,11 +142,19 @@ public class HabitoServiceImpl implements HabitoService {
         }
 
         validarCompatibilidad(habito, dto);
+        if (habito.getValor() != null && habito.getValor().compareTo(dto.getValor()) == 0
+                && habito.getUnidad() != null
+                && habito.getUnidad().trim().equalsIgnoreCase(dto.getUnidad().trim())) {
+            // Repetir los mismos datos no vuelve obsoleta una huella vigente.
+            return convertirADTO(habito);
+        }
         habito.setValor(dto.getValor());
         habito.setUnidad(dto.getUnidad().trim());
         habito.setFechaActualizacion(LocalDateTime.now());
 
-        return convertirADTO(habitoRepository.save(habito));
+        HabitoRespuestaDTO respuesta = convertirADTO(habitoRepository.save(habito));
+        eventos.publishEvent(new InformacionAmbientalActualizada(usuario.getId()));
+        return respuesta;
     }
 
     private Usuario buscarUsuario(Long usuarioId) {

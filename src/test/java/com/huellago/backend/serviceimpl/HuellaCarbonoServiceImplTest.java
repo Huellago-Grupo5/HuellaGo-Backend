@@ -34,6 +34,7 @@ import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class HuellaCarbonoServiceImplTest {
+    @Mock org.springframework.context.ApplicationEventPublisher eventos;
 
     @Mock
     HuellaCarbonoRepository huellaCarbonoRepository;
@@ -87,6 +88,7 @@ class HuellaCarbonoServiceImplTest {
 
         assertEquals(0, resultado.getCo2Total().compareTo(new BigDecimal("10.5")));
         verify(huellaCarbonoRepository).save(any());
+        verify(eventos).publishEvent(new com.huellago.backend.events.InformacionAmbientalActualizada(1L));
     }
 
     @Test

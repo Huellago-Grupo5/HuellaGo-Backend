@@ -12,6 +12,8 @@ import com.huellago.backend.repositories.ResultadoRetoColectivoRepository;
 import com.huellago.backend.repositories.RetoRepository;
 import com.huellago.backend.repositories.UsuarioRetoRepository;
 import com.huellago.backend.services.RetoColectivoService;
+import com.huellago.backend.events.InformacionAmbientalActualizada;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,7 @@ import java.util.List;
 
 @Service
 public class RetoColectivoServiceImpl implements RetoColectivoService {
+    @Autowired ApplicationEventPublisher eventos;
     @Autowired RetoRepository retos;
     @Autowired UsuarioRetoRepository participaciones;
     @Autowired ResultadoRetoColectivoRepository resultados;
@@ -119,6 +122,10 @@ public class RetoColectivoServiceImpl implements RetoColectivoService {
                 ? "EXITOSO" : "NO_ALCANZADO");
         resultado.setFechaCierre(LocalDateTime.now());
         resultados.saveAndFlush(resultado);
+        if (!participantes.isEmpty()) {
+            eventos.publishEvent(new InformacionAmbientalActualizada(participantes.stream()
+                    .map(p -> p.getUsuario().getId()).toList()));
+        }
     }
 
     private RetoColectivoDTO resumen(Reto reto) {

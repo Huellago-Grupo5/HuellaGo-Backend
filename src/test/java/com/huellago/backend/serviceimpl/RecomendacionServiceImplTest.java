@@ -27,6 +27,7 @@ class RecomendacionServiceImplTest {
     @Mock CategoriaHabitoRepository categoriaHabitoRepository;
     @Mock RecomendacionIARepository recomendacionIARepository;
     @Mock UsuarioRecomendacionIARepository usuarioRecomendacionIARepository;
+    @Mock UsuarioRetoRepository usuarioRetoRepository;
     @InjectMocks RecomendacionServiceImpl service;
 
     private final Map<Long, Usuario> usuarios = new HashMap<>();
@@ -173,11 +174,13 @@ class RecomendacionServiceImplTest {
 
         assertEquals(4, catalogo.size());
         assertEquals(4, asociaciones.size());
-        assertEquals(primera.getRecomendaciones().getFirst().getUsuarioRecomendacionId(),
-                segunda.getRecomendaciones().getFirst().getUsuarioRecomendacionId());
-        assertEquals(primera.getRecomendaciones().getFirst().getFechaGeneracion(),
-                segunda.getRecomendaciones().getFirst().getFechaGeneracion());
-        assertTrue(segunda.getRecomendaciones().stream().anyMatch(r -> "Completado".equals(r.getEstado())));
+        assertEquals(3, segunda.getRecomendaciones().size());
+        assertTrue(segunda.getRecomendaciones().stream().allMatch(actual ->
+                primera.getRecomendaciones().stream().anyMatch(previa ->
+                        previa.getUsuarioRecomendacionId().equals(actual.getUsuarioRecomendacionId())
+                                && previa.getFechaGeneracion().equals(actual.getFechaGeneracion()))));
+        assertTrue(segunda.getRecomendaciones().stream().noneMatch(r -> "Completado".equals(r.getEstado())));
+        assertEquals(fechaHabitos.plusDays(1), completada.getFechaCompletado());
         verify(recomendacionIARepository, times(4)).save(any());
         verify(usuarioRecomendacionIARepository, times(4)).save(any());
     }
@@ -265,6 +268,93 @@ class RecomendacionServiceImplTest {
 
         assertEquals(404, error.getStatusCode().value());
         verifyNoInteractions(habitoRepository);
+    }
+
+    @Test
+    void cambioDeHabitoActualizaAccionSinEliminarAsignacionesAnteriores() {
+        habitosCompletos(22L, "Auto", "Electricidad", "Mixta", "Alto", false);
+        var anterior = service.generar(usuarios.get(22L));
+        habitos.get(22L).stream().filter(h -> "medio".equals(h.getNombre())).forEach(h -> {
+            h.setUnidad("Bus");
+            h.setFechaActualizacion(fechaHabitos.plusDays(2));
+        });
+        var actual = service.generar(usuarios.get(22L));
+        assertNotEquals(anterior.getRecomendaciones().getFirst().getRecomendacionId(),
+                actual.getRecomendaciones().getFirst().getRecomendacionId());
+        assertTrue(actual.getRecomendaciones().getFirst().getTitulo().contains("bus"));
+        assertEquals(5, asociaciones.size());
+        service.generar(usuarios.get(22L));
+        assertEquals(5, asociaciones.size());
+        verify(usuarioRecomendacionIARepository, never()).delete(any());
+    }
+
+    @Test
+    void cambioDeCategoriaDominanteGeneraUnaAccionEnfocadaDistinta() {
+        habitosCompletos(22L, "Auto", "Gas", "Mixta", "Alto", false);
+        huella(22L, "12", "1.8", "2", "1.8");
+        var anterior = service.generar(usuarios.get(22L));
+        huella(22L, "1", "4", "2", "1.8");
+        var actual = service.generar(usuarios.get(22L));
+        assertEquals("Energía", actual.getRecomendaciones().getFirst().getCategoria());
+        assertNotEquals(anterior.getRecomendaciones().getFirst().getTitulo(),
+                actual.getRecomendaciones().getFirst().getTitulo());
+        assertTrue(actual.getRecomendaciones().getFirst().getDescripcion().contains("lista de equipos"));
+        assertEquals(6, asociaciones.size());
+        verify(huellaCarbonoRepository, never()).save(any());
+    }
+
+    @Test
+    void variacionNumericaConMismaAccionYPrioridadConservaAsignacionesYFechas() {
+        habitosCompletos(22L, "Auto", "Gas", "Mixta", "Alto", false);
+        huella(22L, "12", "1.8", "2", "1.8");
+        var anterior = service.generar(usuarios.get(22L));
+        huella(22L, "11.9", "1.8", "2", "1.8");
+        var actual = service.generar(usuarios.get(22L));
+        assertEquals(anterior.getRecomendaciones().stream().map(r -> r.getUsuarioRecomendacionId()).toList(),
+                actual.getRecomendaciones().stream().map(r -> r.getUsuarioRecomendacionId()).toList());
+        assertEquals(anterior.getRecomendaciones().getFirst().getFechaGeneracion(),
+                actual.getRecomendaciones().getFirst().getFechaGeneracion());
+        assertEquals(4, asociaciones.size());
+    }
+
+    @Test
+    void retoPersonalCompletadoDejaDeSugerirseSinCompletarSuRecomendacion() {
+        habitosCompletos(22L, "Auto", "Gas", "Mixta", "Alto", false);
+        var anterior = service.generar(usuarios.get(22L));
+        Integer origenId = anterior.getRecomendaciones().getFirst().getUsuarioRecomendacionId();
+        UsuarioRecomendacionIA origen = asociaciones.values().stream()
+                .filter(a -> a.getId().equals(origenId)).findFirst().orElseThrow();
+        Reto reto = new Reto();
+        reto.setRecomendacionOrigen(origen);
+        UsuarioReto participacion = new UsuarioReto();
+        participacion.setReto(reto);
+        participacion.setEstado("completado");
+        when(usuarioRetoRepository.findByUsuario_IdAndEstadoIgnoreCaseOrderByFechaAceptacionDesc(
+                22L, "completado")).thenReturn(List.of(participacion));
+        var actual = service.generar(usuarios.get(22L));
+        assertEquals(3, actual.getRecomendaciones().size());
+        assertTrue(actual.getRecomendaciones().stream().noneMatch(r -> origenId.equals(r.getUsuarioRecomendacionId())));
+        assertEquals("Pendiente", origen.getEstado());
+        assertNull(origen.getFechaCompletado());
+        assertSame(origen, reto.getRecomendacionOrigen());
+        verify(usuarioRetoRepository, never()).save(any());
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void todasRealizadasConservanHistorialSinCrearRecomendacionesArtificiales() {
+        habitosCompletos(22L, "Auto", "Gas", "Mixta", "Alto", false);
+        service.generar(usuarios.get(22L));
+        asociaciones.values().forEach(a -> {
+            a.setEstado("completado");
+            a.setFechaCompletado(fechaHabitos.plusDays(1));
+        });
+        var actual = service.generar(usuarios.get(22L));
+        assertEquals("SIN_SUGERENCIAS_NUEVAS", actual.getEstado());
+        assertTrue(actual.getRecomendaciones().isEmpty());
+        assertEquals(4, asociaciones.size());
+        assertTrue(asociaciones.values().stream().allMatch(a ->
+                fechaHabitos.plusDays(1).equals(a.getFechaCompletado())));
     }
 
     private void habitosCompletos(Long usuarioId, String medio, String fuente,
