@@ -12,6 +12,7 @@ import com.huellago.backend.repositories.ResultadoRetoColectivoRepository;
 import com.huellago.backend.repositories.RetoRepository;
 import com.huellago.backend.repositories.UsuarioRetoRepository;
 import com.huellago.backend.services.RetoColectivoService;
+import com.huellago.backend.security.AutorizacionInstitucionalService;
 import com.huellago.backend.events.InformacionAmbientalActualizada;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,12 +33,13 @@ public class RetoColectivoServiceImpl implements RetoColectivoService {
     @Autowired RetoRepository retos;
     @Autowired UsuarioRetoRepository participaciones;
     @Autowired ResultadoRetoColectivoRepository resultados;
+    @Autowired AutorizacionInstitucionalService autorizacionInstitucional;
 
     @Override
     @Transactional(readOnly = true)
     public List<RetoColectivoDTO> listarDisponibles() {
         return retos.findByTipo(TipoReto.COLECTIVO).stream()
-                .filter(reto -> disponible(reto, LocalDate.now())
+                .filter(reto -> reto.getInstitucion() == null && disponible(reto, LocalDate.now())
                         && !resultados.existsByReto_Id(reto.getId()))
                 .map(this::resumen)
                 .toList();
@@ -46,7 +48,47 @@ public class RetoColectivoServiceImpl implements RetoColectivoService {
     @Override
     @Transactional(readOnly = true)
     public RetoColectivoDTO obtener(Integer retoId) {
-        return resumen(buscarColectivo(retoId));
+        Reto reto = buscarColectivo(retoId);
+        if (reto.getInstitucion() != null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Se requiere identidad institucional");
+        }
+        return resumen(reto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RetoColectivoDTO> listarDisponibles(Long usuarioId) {
+        validarIdentidad(usuarioId);
+        return retos.findByTipo(TipoReto.COLECTIVO).stream()
+                .filter(r -> r.getInstitucion() == null
+                        || autorizacionInstitucional.esMiembro(usuarioId, r.getInstitucion().getId()))
+                .filter(r -> disponible(r, LocalDate.now()) && !resultados.existsByReto_Id(r.getId()))
+                .map(this::resumen).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RetoColectivoDTO obtener(Integer retoId, Long usuarioId) {
+        validarIdentidad(usuarioId);
+        Reto reto = buscarColectivo(retoId);
+        autorizar(reto, usuarioId);
+        return resumen(reto);
+    }
+
+    private void validarIdentidad(Long usuarioId) {
+        if (usuarioId == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Se requiere autenticación");
+    }
+
+    private void autorizar(Reto reto, Long usuarioId) {
+        if (reto.getInstitucion() != null) {
+            autorizacionInstitucional.exigirMiembro(usuarioId, reto.getInstitucion().getId());
+        }
+    }
+
+    private void autorizarParticipacion(Reto reto, Long usuarioId) {
+        if (reto.getInstitucion() != null) {
+            autorizacionInstitucional.exigirMiembroParaParticipar(usuarioId, reto.getInstitucion().getId());
+        }
     }
 
     @Override
@@ -57,6 +99,7 @@ public class RetoColectivoServiceImpl implements RetoColectivoService {
         }
         bloquearReto(retoId);
         Reto reto = buscarColectivo(retoId);
+        autorizarParticipacion(reto, usuario.getId());
         if (!disponible(reto, LocalDate.now()) || resultados.existsByReto_Id(retoId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "El reto colectivo no admite participantes");
         }
@@ -86,6 +129,7 @@ public class RetoColectivoServiceImpl implements RetoColectivoService {
                         HttpStatus.NOT_FOUND, "Participación no encontrada"));
         bloquearReto(retoId);
         Reto reto = buscarColectivo(retoId);
+        autorizarParticipacion(reto, usuarioId);
         if (!disponible(reto, LocalDate.now()) || resultados.existsByReto_Id(retoId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "El periodo del reto colectivo cerró");
         }

@@ -50,8 +50,8 @@ class RetoColectivoControllerIntegrationTest {
     void consultaCatalogoYResultadoSinEscrituras() throws Exception {
         RetoColectivoDTO dto = new RetoColectivoDTO(7, "Reto grupal", LocalDate.now().minusDays(1),
                 LocalDate.now().plusDays(1), 3, new BigDecimal("75.00"), "ACTIVO", null);
-        when(servicio.listarDisponibles()).thenReturn(List.of(dto));
-        when(servicio.obtener(7)).thenReturn(dto);
+        when(servicio.listarDisponibles(22L)).thenReturn(List.of(dto));
+        when(servicio.obtener(7, 22L)).thenReturn(dto);
 
         mvc.perform(get("/retos/colectivos").with(authentication(autenticacion())))
                 .andExpect(status().isOk())

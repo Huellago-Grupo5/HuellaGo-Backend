@@ -1,5 +1,6 @@
 package com.huellago.backend.entities;
 
 public enum RolInstitucional {
-    ADMIN_INSTITUCIONAL
+    ADMIN_INSTITUCIONAL,
+    MIEMBRO
 }

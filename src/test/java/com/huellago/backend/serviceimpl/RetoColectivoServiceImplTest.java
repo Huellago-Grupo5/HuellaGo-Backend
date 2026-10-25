@@ -30,7 +30,58 @@ class RetoColectivoServiceImplTest {
     @Mock RetoRepository retos;
     @Mock UsuarioRetoRepository participaciones;
     @Mock ResultadoRetoColectivoRepository resultados;
+    @Mock com.huellago.backend.security.AutorizacionInstitucionalService autorizacionInstitucional;
     @InjectMocks RetoColectivoServiceImpl servicio;
+
+    @Test
+    void campanaInstitucionalNoSeFiltraPorCatalogoGlobalNiDetalleSinIdentidad() {
+        Reto campana = reto(7, LocalDate.now().plusDays(1));
+        var institucion = new Institucion();
+        org.springframework.test.util.ReflectionTestUtils.setField(institucion, "id", 5L);
+        campana.setInstitucion(institucion);
+        when(retos.findByTipo(TipoReto.COLECTIVO)).thenReturn(List.of(campana));
+        when(retos.findById(7)).thenReturn(Optional.of(campana));
+        assertTrue(servicio.listarDisponibles().isEmpty());
+        assertTrue(servicio.listarDisponibles(33L).isEmpty());
+        assertEquals(HttpStatus.FORBIDDEN, error(() -> servicio.obtener(7)));
+        when(autorizacionInstitucional.esMiembro(22L, 5L)).thenReturn(true);
+        assertEquals(1, servicio.listarDisponibles(22L).size());
+    }
+
+    @Test
+    void campanaExigeAfiliacionEnDetalleUnionYProgresoInclusoPorRutasHu29() {
+        Reto campana = reto(7, LocalDate.now().plusDays(1));
+        var institucion = new Institucion();
+        org.springframework.test.util.ReflectionTestUtils.setField(institucion, "id", 5L);
+        campana.setInstitucion(institucion);
+        when(retos.findById(7)).thenReturn(Optional.of(campana));
+        when(retos.bloquearParaAceptacion(7)).thenReturn(Optional.of(7));
+        when(participaciones.buscarRetoIdDeParticipacion(1, 33L)).thenReturn(Optional.of(7));
+        doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "No miembro"))
+                .when(autorizacionInstitucional).exigirMiembro(33L, 5L);
+        doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "No miembro"))
+                .when(autorizacionInstitucional).exigirMiembroParaParticipar(33L, 5L);
+        assertEquals(HttpStatus.FORBIDDEN, error(() -> servicio.obtener(7, 33L)));
+        assertEquals(HttpStatus.FORBIDDEN, error(() -> servicio.unirse(7, usuario(33L))));
+        assertEquals(HttpStatus.FORBIDDEN, error(() -> servicio.actualizarProgreso(1, 33L,
+                new ActualizarProgresoDTO(BigDecimal.valueOf(50)))));
+        verify(participaciones, never()).saveAndFlush(any());
+        verify(participaciones, never()).save(any());
+    }
+
+    @Test
+    void miembroSeUneACampanaConElMismoMecanismoHu29SinRecompensas() {
+        Reto campana = reto(7, LocalDate.now().plusDays(1));
+        var institucion = new Institucion();
+        org.springframework.test.util.ReflectionTestUtils.setField(institucion, "id", 5L);
+        campana.setInstitucion(institucion);
+        when(retos.findById(7)).thenReturn(Optional.of(campana));
+        when(retos.bloquearParaAceptacion(7)).thenReturn(Optional.of(7));
+        when(participaciones.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
+        assertEquals("activo", servicio.unirse(7, usuario(22L)).getEstado());
+        verify(autorizacionInstitucional).exigirMiembroParaParticipar(22L, 5L);
+        verify(participaciones).saveAndFlush(argThat(p -> p.getProgreso().signum() == 0));
+    }
 
     @Test
     void listaSoloColectivosDisponiblesSinParticipantesConProgresoCero() {
@@ -46,6 +97,24 @@ class RetoColectivoServiceImplTest {
         assertEquals(0, lista.getFirst().getParticipantes());
         assertEquals(0, lista.getFirst().getProgresoColectivo().compareTo(BigDecimal.ZERO));
         verify(participaciones, never()).save(any());
+    }
+
+    @Test
+    void cierreDeCampanaInstitucionalConservaCalculoYEventoHu29Hu37SinExigirJwt() {
+        Reto campana = reto(7, LocalDate.now().minusDays(1));
+        var institucion = new Institucion();
+        org.springframework.test.util.ReflectionTestUtils.setField(institucion, "id", 5L);
+        campana.setInstitucion(institucion);
+        when(retos.bloquearParaAceptacion(7)).thenReturn(Optional.of(7));
+        when(retos.findById(7)).thenReturn(Optional.of(campana));
+        when(participaciones.findByReto_Id(7)).thenReturn(List.of(
+                participacion(1, 22L, campana, 100), participacion(2, 33L, campana, 50)));
+        servicio.cerrarVencido(7);
+        verify(resultados).saveAndFlush(argThat(r -> r.getParticipantes() == 2
+                && "NO_ALCANZADO".equals(r.getEstado())
+                && r.getProgresoFinal().compareTo(new BigDecimal("75.00")) == 0));
+        verify(eventos).publishEvent(new com.huellago.backend.events.InformacionAmbientalActualizada(List.of(22L, 33L)));
+        verifyNoInteractions(autorizacionInstitucional);
     }
 
     @Test

@@ -22,13 +22,13 @@ public class RetoColectivoController {
     @Autowired RetoColectivoService servicio;
 
     @GetMapping
-    public List<RetoColectivoDTO> disponibles() {
-        return servicio.listarDisponibles();
+    public List<RetoColectivoDTO> disponibles(@AuthenticationPrincipal UserSecurity autenticado) {
+        return servicio.listarDisponibles(autenticado.getUser().getId());
     }
 
     @GetMapping("/{id}")
-    public RetoColectivoDTO consultar(@PathVariable Integer id) {
-        return servicio.obtener(id);
+    public RetoColectivoDTO consultar(@PathVariable Integer id, @AuthenticationPrincipal UserSecurity autenticado) {
+        return servicio.obtener(id, autenticado.getUser().getId());
     }
 
     @PostMapping("/{id}/unirse")
