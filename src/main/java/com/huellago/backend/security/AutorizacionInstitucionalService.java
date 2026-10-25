@@ -25,6 +25,14 @@ public class AutorizacionInstitucionalService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public void exigirAdministradorConsulta(Long usuarioId, Long institucionId) {
+        if (usuarioId == null || !afiliaciones.existsByUsuario_IdAndInstitucion_IdAndRol(
+                usuarioId, institucionId, RolInstitucional.ADMIN_INSTITUCIONAL)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No tienes acceso administrativo a esta institución");
+        }
+    }
+
     @Transactional
     public void exigirAdministrador(Long usuarioId, Long institucionId) {
         var vinculo = afiliaciones.bloquearVinculo(usuarioId, institucionId).orElseThrow(() ->

@@ -92,9 +92,8 @@ public class CampanaInstitucionalServiceImpl implements CampanaInstitucionalServ
     private CampanaRespuestaDTO respuesta(Reto reto, Long usuarioId) {
         LocalDate hoy = LocalDate.now();
         boolean publicada = Boolean.TRUE.equals(reto.getActivo());
-        String estado = !publicada ? "NO_DISPONIBLE"
-                : hoy.isBefore(reto.getFechaInicio()) ? "FUTURA"
-                : hoy.isAfter(reto.getFechaFin()) ? "FINALIZADA" : "ACTIVA";
+        String estado = CalculoSeguimientoColectivo.estadoCampana(new CalculoSeguimientoColectivo.Datos(
+                reto.getId(), reto.getTitulo(), reto.getFechaInicio(), reto.getFechaFin(), reto.getActivo()), hoy);
         return new CampanaRespuestaDTO(reto.getId(), reto.getInstitucion().getId(), reto.getTitulo(),
                 reto.getDescripcion(), reto.getFechaInicio(), reto.getFechaFin(),
                 ChronoUnit.DAYS.between(reto.getFechaInicio(), reto.getFechaFin()) + 1,

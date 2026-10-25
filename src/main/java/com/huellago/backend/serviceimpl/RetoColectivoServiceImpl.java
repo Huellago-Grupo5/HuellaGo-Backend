@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -176,33 +175,32 @@ public class RetoColectivoServiceImpl implements RetoColectivoService {
         var cerrado = resultados.findByReto_Id(reto.getId());
         if (cerrado.isPresent()) {
             ResultadoRetoColectivo resultado = cerrado.get();
-            return new RetoColectivoDTO(reto.getId(), reto.getTitulo(), reto.getFechaInicio(),
-                    reto.getFechaFin(), resultado.getParticipantes(), resultado.getProgresoFinal(),
-                    resultado.getEstado(), resultado.getFechaCierre());
+            return CalculoSeguimientoColectivo.resumen(datos(reto), 0, BigDecimal.ZERO,
+                    new CalculoSeguimientoColectivo.Cierre(resultado.getParticipantes(), resultado.getProgresoFinal(),
+                            resultado.getEstado(), resultado.getFechaCierre()), LocalDate.now());
         }
         List<UsuarioReto> participantes = participaciones.findByReto_Id(reto.getId());
-        String estado = reto.getFechaFin() != null && LocalDate.now().isAfter(reto.getFechaFin())
-                ? "PENDIENTE_CIERRE"
-                : disponible(reto, LocalDate.now()) ? "ACTIVO" : "NO_DISPONIBLE";
-        return new RetoColectivoDTO(reto.getId(), reto.getTitulo(), reto.getFechaInicio(),
-                reto.getFechaFin(), participantes.size(), promedio(participantes), estado, null);
+        return CalculoSeguimientoColectivo.resumen(datos(reto), participantes.size(), suma(participantes),
+                null, LocalDate.now());
     }
 
     private BigDecimal promedio(List<UsuarioReto> participantes) {
-        if (participantes.isEmpty()) {
-            return BigDecimal.ZERO.setScale(2);
-        }
-        BigDecimal suma = participantes.stream()
+        return CalculoSeguimientoColectivo.promedio(suma(participantes), participantes.size());
+    }
+
+    private BigDecimal suma(List<UsuarioReto> participantes) {
+        return participantes.stream()
                 .map(p -> p.getProgreso() == null ? BigDecimal.ZERO : p.getProgreso())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return suma.divide(BigDecimal.valueOf(participantes.size()), 2, RoundingMode.HALF_UP);
     }
 
     private boolean disponible(Reto reto, LocalDate hoy) {
-        return Boolean.TRUE.equals(reto.getActivo()) && reto.getFechaFin() != null
-                && (reto.getFechaInicio() == null || !hoy.isBefore(reto.getFechaInicio()))
-                && !hoy.isAfter(reto.getFechaFin())
-                && (reto.getFechaInicio() == null || !reto.getFechaInicio().isAfter(reto.getFechaFin()));
+        return CalculoSeguimientoColectivo.disponible(datos(reto), hoy);
+    }
+
+    private CalculoSeguimientoColectivo.Datos datos(Reto reto) {
+        return new CalculoSeguimientoColectivo.Datos(reto.getId(), reto.getTitulo(),
+                reto.getFechaInicio(), reto.getFechaFin(), reto.getActivo());
     }
 
     private Reto buscarColectivo(Integer retoId) {

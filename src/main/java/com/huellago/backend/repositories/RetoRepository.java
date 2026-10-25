@@ -12,7 +12,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.time.LocalDate;
 
-public interface RetoRepository extends JpaRepository<Reto, Integer> {
+public interface RetoRepository extends JpaRepository<Reto, Integer>, RetoReporteRepository {
+    boolean existsByIdAndInstitucion_IdAndTipo(Integer id, Long institucionId, TipoReto tipo);
     List<Reto> findByActivoTrueOrderByFechaInicioAsc();
     List<Reto> findByTipo(TipoReto tipo);
     boolean existsByRecomendacionOrigen_Id(Integer usuarioRecomendacionId);

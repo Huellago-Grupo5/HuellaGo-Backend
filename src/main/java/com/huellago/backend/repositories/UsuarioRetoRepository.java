@@ -7,8 +7,12 @@ import com.huellago.backend.entities.UsuarioReto;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.repository.query.Param;
+import com.huellago.backend.repositories.projections.ParticipacionReporteVista;
 
-public interface UsuarioRetoRepository extends JpaRepository<UsuarioReto, Integer> {
+public interface UsuarioRetoRepository extends JpaRepository<UsuarioReto, Integer>, UsuarioRetoReporteRepository {
+    @Query("select ur.reto.id as retoId, count(ur) as participantes, coalesce(sum(ur.progreso), 0) as sumaProgreso "
+            + "from UsuarioReto ur where ur.reto.id in :ids group by ur.reto.id")
+    List<ParticipacionReporteVista> resumirParaReporte(@Param("ids") List<Integer> ids);
 
     boolean existsByUsuario_IdAndReto_Id(Long usuarioId, Integer retoId);
 
