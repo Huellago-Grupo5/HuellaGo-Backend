@@ -9,7 +9,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
-@AllArgsConstructor
 @NoArgsConstructor
 public class UsuarioPerfilDTO {
     @NotBlank(message = "Los nombres son obligatorios")
@@ -28,4 +27,10 @@ public class UsuarioPerfilDTO {
     @Size(max = 120, message = "El correo no debe superar los 120 caracteres")
     @Email(message = "El formato del correo no es válido")
     private String correo;
+    public UsuarioPerfilDTO(String nombres, String apellidos, String correo) {
+        setNombres(nombres); setApellidos(apellidos); setCorreo(correo);
+    }
+    public void setNombres(String valor) { nombres = com.huellago.backend.security.ValidacionCuenta.nombre(valor); }
+    public void setApellidos(String valor) { apellidos = com.huellago.backend.security.ValidacionCuenta.nombre(valor); }
+    public void setCorreo(String valor) { correo = com.huellago.backend.security.ValidacionCuenta.correo(valor); }
 }

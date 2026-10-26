@@ -63,7 +63,7 @@ class InsigniaControllerIntegrationTest {
 
     @Test
     void sinJwtNoExponeLaColeccion() throws Exception {
-        mvc.perform(get("/usuarios/me/insignias")).andExpect(status().isForbidden());
+        mvc.perform(get("/usuarios/me/insignias")).andExpect(status().isUnauthorized());
         verifyNoInteractions(insignias);
     }
 

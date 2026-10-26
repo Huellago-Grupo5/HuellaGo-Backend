@@ -18,7 +18,7 @@ import com.huellago.backend.entities.Usuario;
 public interface UsuarioService {
     public UsuarioRespuestaDTO registrar(UsuarioRegistroDTO usuarioRegistroDTO);
     public Usuario buscarPorCorreo(String correo);
-    public TokenDTO solicitarRecuperacion(RecuperarContrasenaDTO recuperarContrasenaDTO);
+    public com.huellago.backend.dtos.RecuperacionRespuestaDTO solicitarRecuperacion(RecuperarContrasenaDTO recuperarContrasenaDTO);
     public void restablecerContrasena(RestablecerContrasenaDTO restablecerContrasenaDTO);
     public UsuarioRespuestaDTO actualizarPerfil(String correoAutenticado, UsuarioPerfilDTO usuarioPerfilDTO);
     public EcoPuntosRespuestaDTO otorgarEcoPuntos(Usuario usuario, EcoPuntosAccionDTO ecoPuntosAccionDTO);

@@ -77,11 +77,11 @@ class PublicacionComunitariaControllerTest {
     void sinJwtOTokenInvalidoNoPublicaNiConsulta() throws Exception {
         mvc.perform(post("/comunidad/publicaciones").contentType("application/json")
                         .content("{\"tipo\":\"RETO\",\"origenId\":9}"))
-                .andExpect(status().isForbidden());
-        mvc.perform(get("/comunidad/publicaciones")).andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/comunidad/publicaciones")).andExpect(status().isUnauthorized());
         when(jwt.extractUsername("invalido")).thenThrow(new IllegalArgumentException("token inválido"));
         mvc.perform(get("/comunidad/publicaciones").header("Authorization", "Bearer invalido"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(servicio);
     }
 

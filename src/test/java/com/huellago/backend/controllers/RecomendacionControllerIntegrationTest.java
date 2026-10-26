@@ -74,14 +74,14 @@ class RecomendacionControllerIntegrationTest {
 
     @Test
     void sinJwtNoPermiteGenerar() throws Exception {
-        mvc.perform(post(URL)).andExpect(status().isForbidden());
+        mvc.perform(post(URL)).andExpect(status().isUnauthorized());
         verifyNoInteractions(recomendacionService);
     }
 
     @Test
     void jwtManipuladoEsRechazado() throws Exception {
         mvc.perform(post(URL).header("Authorization", "Bearer token-invalido"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(recomendacionService);
     }
 
@@ -89,7 +89,7 @@ class RecomendacionControllerIntegrationTest {
     void jwtDeSesionCerradaEsRechazado() throws Exception {
         String token = autenticar(false);
         mvc.perform(post(URL).header("Authorization", "Bearer " + token))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(recomendacionService);
     }
 

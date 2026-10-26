@@ -67,8 +67,8 @@ class RecomendacionCompletadaControllerTest {
 
     @Test
     void sinAutenticacionNoConsultaNiActualiza() throws Exception {
-        mvc.perform(put("/usuarios/me/recomendaciones/3/completar")).andExpect(status().isForbidden());
-        mvc.perform(get("/usuarios/me/recomendaciones/historial")).andExpect(status().isForbidden());
+        mvc.perform(put("/usuarios/me/recomendaciones/3/completar")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/usuarios/me/recomendaciones/historial")).andExpect(status().isUnauthorized());
         verifyNoInteractions(servicio);
     }
 

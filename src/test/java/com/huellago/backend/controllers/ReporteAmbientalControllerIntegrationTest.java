@@ -82,7 +82,7 @@ class ReporteAmbientalControllerIntegrationTest {
     @Test
     void solicitudSinJwtNoPuedeDescargarReporte() throws Exception {
         mvc.perform(get("/huella-carbono/reporte"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(reporteAmbientalService, never()).generarReporte(org.mockito.ArgumentMatchers.any());
     }

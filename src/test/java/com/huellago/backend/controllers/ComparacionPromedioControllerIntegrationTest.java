@@ -93,7 +93,7 @@ class ComparacionPromedioControllerIntegrationTest {
     @Test
     void solicitudSinJwtNoPuedeConsultarLaComparacion() throws Exception {
         mvc.perform(get("/huella-carbono/comparacion-promedio"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(service, never()).compararConPromedio(22L);
     }

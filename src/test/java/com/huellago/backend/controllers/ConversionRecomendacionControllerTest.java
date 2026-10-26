@@ -56,7 +56,7 @@ class ConversionRecomendacionControllerTest {
     @Test
     void sinJwtNoConvierte() throws Exception {
         mvc.perform(post("/usuarios/me/recomendaciones/3/convertir-en-reto"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(servicio);
     }
 }

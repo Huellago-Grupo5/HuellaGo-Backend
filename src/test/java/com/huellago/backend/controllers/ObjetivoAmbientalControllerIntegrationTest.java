@@ -102,7 +102,7 @@ class ObjetivoAmbientalControllerIntegrationTest {
         mvc.perform(put("/usuarios/me/objetivos")
                         .contentType("application/json")
                         .content("{\"objetivoIds\":[2,4]}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(service, never()).actualizarSeleccion(any(), any());
     }

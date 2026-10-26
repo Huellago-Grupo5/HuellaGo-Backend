@@ -34,6 +34,9 @@ class UsuarioPerfilServiceImplTest {
     @Mock
     SesionRepository sesionRepository;
 
+    @Mock jakarta.persistence.EntityManager entityManager;
+    @Mock com.huellago.backend.repositories.RecuperacionContrasenaRepository recuperaciones;
+
     @InjectMocks
     UsuarioServiceImpl service;
 
@@ -53,6 +56,8 @@ class UsuarioPerfilServiceImplTest {
         usuario.setVisibilidadComunidad(false);
         usuario.setFechaCreacion(LocalDateTime.now().minusMonths(1));
         when(usuarioRepository.findByCorreo("anterior@huellago.com")).thenReturn(usuario);
+        org.mockito.Mockito.lenient().when(usuarioRepository.bloquearParaRecomendaciones(22L))
+                .thenReturn(java.util.Optional.of(22L));
     }
 
     @Test

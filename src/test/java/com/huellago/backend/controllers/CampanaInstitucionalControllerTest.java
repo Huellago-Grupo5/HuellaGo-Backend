@@ -92,10 +92,10 @@ class CampanaInstitucionalControllerTest {
     @Test
     void sinAutenticacionNoPuedeCrearNiConsultar() throws Exception {
         mvc.perform(post("/instituciones/5/campanas").contentType("application/json").content(json()))
-                .andExpect(status().isForbidden());
-        mvc.perform(get("/instituciones/5/campanas")).andExpect(status().isForbidden());
-        mvc.perform(get("/instituciones/5/campanas/50")).andExpect(status().isForbidden());
-        mvc.perform(get("/usuarios/me/campanas")).andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/instituciones/5/campanas")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/instituciones/5/campanas/50")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/usuarios/me/campanas")).andExpect(status().isUnauthorized());
         verifyNoInteractions(servicio);
     }
 

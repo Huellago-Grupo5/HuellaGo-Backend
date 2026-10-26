@@ -67,7 +67,7 @@ class EcoPuntosAccionControllerIntegrationTest {
         mvc.perform(post("/usuarios/me/eco-puntos")
                         .contentType("application/json")
                         .content("{\"accion\":\"RECICLAR\"}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(usuarios);
     }
 
@@ -87,7 +87,7 @@ class EcoPuntosAccionControllerIntegrationTest {
 
     @Test
     void consultaDeNivelSinJwtSeRechaza() throws Exception {
-        mvc.perform(get("/usuarios/me/nivel")).andExpect(status().isForbidden());
+        mvc.perform(get("/usuarios/me/nivel")).andExpect(status().isUnauthorized());
         verifyNoInteractions(usuarios);
     }
 

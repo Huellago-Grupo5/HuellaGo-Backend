@@ -56,11 +56,11 @@ class HabitoActualizarControllerIntegrationTest {
     void rechazaSolicitudSinJwtOConJwtInvalido() throws Exception {
         mvc.perform(put("/habitos/10").contentType("application/json")
                 .content("{\"nombre\":\"medio\",\"valor\":0,\"unidad\":\"Bus\"}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         mvc.perform(put("/habitos/10").header("Authorization", "Bearer invalido")
                 .contentType("application/json")
                 .content("{\"nombre\":\"medio\",\"valor\":0,\"unidad\":\"Bus\"}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(servicio);
     }
 

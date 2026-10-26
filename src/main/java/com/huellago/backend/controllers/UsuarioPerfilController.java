@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@CrossOrigin("*")
+@CrossOrigin(origins = "*", exposedHeaders = "X-Reauthentication-Required")
 @RequestMapping("/usuarios")
 public class UsuarioPerfilController {
 
@@ -23,9 +23,11 @@ public class UsuarioPerfilController {
 
     @PutMapping("/perfil")
     public ResponseEntity<UsuarioRespuestaDTO> actualizarPerfil(
-            @RequestBody UsuarioPerfilDTO usuarioPerfilDTO,
+            @jakarta.validation.Valid @RequestBody UsuarioPerfilDTO usuarioPerfilDTO,
             @AuthenticationPrincipal UserSecurity userSecurity) {
-        return ResponseEntity.ok(
-                usuarioService.actualizarPerfil(userSecurity.getUsername(), usuarioPerfilDTO));
+        String anterior = userSecurity.getUsername();
+        UsuarioRespuestaDTO resultado = usuarioService.actualizarPerfil(anterior, usuarioPerfilDTO);
+        return ResponseEntity.ok().header("X-Reauthentication-Required",
+                Boolean.toString(!anterior.equalsIgnoreCase(resultado.getCorreo()))).body(resultado);
     }
 }

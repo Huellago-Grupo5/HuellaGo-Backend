@@ -93,13 +93,13 @@ class ReporteInstitucionalControllerTest {
         verifyNoInteractions(servicio);
     }
     @Test void sinJwtAmbasRutasRechazadasPorSeguridadExistente() throws Exception {
-        mvc.perform(get(URL)).andExpect(status().isForbidden());
-        mvc.perform(get(URL + "/descargar")).andExpect(status().isForbidden());
+        mvc.perform(get(URL)).andExpect(status().isUnauthorized());
+        mvc.perform(get(URL + "/descargar")).andExpect(status().isUnauthorized());
         verifyNoInteractions(servicio, csv);
     }
     @Test void tokenInvalidoNoPermiteConsultarNiDescargar() throws Exception {
         mvc.perform(get(URL + "/descargar").header("Authorization", "Bearer invalido"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(servicio);
     }
     @Test void jwtFirmadoSesionActivaEIdentidadRealDelFiltroPermitenDescarga() throws Exception {
@@ -119,7 +119,7 @@ class ReporteInstitucionalControllerTest {
         UserSecurity principal = new UserSecurity(usuario);
         when(detalles.loadUserByUsername("admin@pruebas.test")).thenReturn(principal);
         mvc.perform(get(URL).header("Authorization", "Bearer " + jwt.generateToken(principal)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(servicio);
     }
     @Test void erroresDeNegocioMantienenHttpYMensajeJsonNoCsv() throws Exception {

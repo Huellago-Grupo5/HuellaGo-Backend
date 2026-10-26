@@ -54,6 +54,9 @@ class UsuarioPerfilControllerIntegrationTest {
     UsuarioService usuarioService;
 
     @MockitoBean
+    com.huellago.backend.services.AccesoCuentaService accesoCuentaService;
+
+    @MockitoBean
     SesionService sesionService;
 
     @MockitoBean
@@ -147,7 +150,7 @@ class UsuarioPerfilControllerIntegrationTest {
                                   "correo": "nuevo@huellago.com"
                                 }
                                 """))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(usuarioService, never()).actualizarPerfil(any(), any());
     }

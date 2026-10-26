@@ -90,10 +90,10 @@ class RetoFinalizacionControllerIntegrationTest {
 
     @Test
     void sinJwtOConTokenInvalidoNoAccede() throws Exception {
-        mvc.perform(put("/retos-activos/29/completar")).andExpect(status().isForbidden());
+        mvc.perform(put("/retos-activos/29/completar")).andExpect(status().isUnauthorized());
         mvc.perform(put("/retos-activos/29/completar")
                         .header("Authorization", "Bearer invalido"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(retos);
     }
 

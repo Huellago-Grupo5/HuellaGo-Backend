@@ -127,11 +127,11 @@ class PrivacidadControllerIntegrationTest {
 
     @Test
     void solicitudesSinJwtSonRechazadas() throws Exception {
-        mvc.perform(get(URL)).andExpect(status().isForbidden());
+        mvc.perform(get(URL)).andExpect(status().isUnauthorized());
         mvc.perform(put(URL)
                         .contentType("application/json")
                         .content("{\"visibilidadComunidad\":false}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(usuarioService, never()).obtenerPrivacidad(any());
         verify(usuarioService, never()).actualizarPrivacidad(any(), any());

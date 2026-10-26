@@ -121,10 +121,10 @@ class HuellaRecalculoControllerIntegrationTest {
 
     @Test
     void sinJwtOConTokenInvalidoNoAccede() throws Exception {
-        mvc.perform(post("/huella-carbono/recalcular")).andExpect(status().isForbidden());
+        mvc.perform(post("/huella-carbono/recalcular")).andExpect(status().isUnauthorized());
         mvc.perform(post("/huella-carbono/recalcular")
                         .header("Authorization", "Bearer invalido"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(usuarios, habitos, huellas);
     }
 

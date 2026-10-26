@@ -43,10 +43,26 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Autowired
     SesionRepository sesionRepository;
 
+    @Autowired
+    com.huellago.backend.services.RecuperacionContrasenaService recuperacionContrasenaService;
+
+    @jakarta.persistence.PersistenceContext
+    jakarta.persistence.EntityManager entityManager;
+
+    @Autowired
+    com.huellago.backend.repositories.RecuperacionContrasenaRepository recuperaciones;
+
 
     @Override
+    @Transactional
     public UsuarioRespuestaDTO registrar(UsuarioRegistroDTO usuarioRegistroDTO) {
-        if (usuarioRepository.existsByCorreo(usuarioRegistroDTO.getCorreo())) {
+        if (usuarioRegistroDTO != null) {
+            usuarioRegistroDTO.setNombres(usuarioRegistroDTO.getNombres());
+            usuarioRegistroDTO.setApellidos(usuarioRegistroDTO.getApellidos());
+            usuarioRegistroDTO.setCorreo(usuarioRegistroDTO.getCorreo());
+        }
+        com.huellago.backend.security.ValidacionCuenta.exigir(usuarioRegistroDTO);
+        if (usuarioRepository.existeCorreoNormalizado(usuarioRegistroDTO.getCorreo())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya está registrado");
         }
 
@@ -63,7 +79,11 @@ public class UsuarioServiceImpl implements UsuarioService {
         usuario.setFechaCreacion(ahora);
         usuario.setFechaActualizacion(ahora);
 
-        Usuario usuarioGuardado = usuarioRepository.save(usuario);
+        Usuario usuarioGuardado;
+        try { usuarioGuardado = usuarioRepository.saveAndFlush(usuario); }
+        catch (org.springframework.dao.DataIntegrityViolationException error) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya está registrado");
+        }
         return new UsuarioRespuestaDTO(
                 usuarioGuardado.getId(),
                 usuarioGuardado.getNombres(),
@@ -80,47 +100,37 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Override
     public Usuario buscarPorCorreo(String correo) {
-        return usuarioRepository.findByCorreo(correo);
+        return usuarioRepository.findByCorreo(com.huellago.backend.security.ValidacionCuenta.correo(correo));
     }
 
     @Override
-    public TokenDTO solicitarRecuperacion(RecuperarContrasenaDTO dto) {
-        Usuario usuario = buscarPorCorreo(dto.getCorreo());
-        if (usuario == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
-        }
-
-        UserSecurity userSecurity = new UserSecurity(usuario);
-        return new TokenDTO(
-                jwtUtilService.generatePasswordResetToken(userSecurity),
-                usuario.getId(),
-                usuario.getCorreo()
-        );
+    public com.huellago.backend.dtos.RecuperacionRespuestaDTO solicitarRecuperacion(RecuperarContrasenaDTO dto) {
+        return recuperacionContrasenaService.solicitar(dto);
     }
 
     @Override
     public void restablecerContrasena(RestablecerContrasenaDTO dto) {
-        if (!jwtUtilService.isPasswordResetToken(dto.getToken())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token de recuperación inválido");
-        }
-
-        String correo = jwtUtilService.extractUsername(dto.getToken());
-        Usuario usuario = buscarPorCorreo(correo);
-        if (usuario == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
-        }
-
-        usuario.setContrasena(new BCryptPasswordEncoder().encode(dto.getNuevaContrasena()));
-        usuario.setFechaActualizacion(LocalDateTime.now());
-        usuarioRepository.save(usuario);
+        recuperacionContrasenaService.restablecer(dto);
     }
 
     @Override
     @Transactional
     public UsuarioRespuestaDTO actualizarPerfil(String correoAutenticado, UsuarioPerfilDTO dto) {
+        if (dto != null) {
+            dto.setNombres(dto.getNombres()); dto.setApellidos(dto.getApellidos()); dto.setCorreo(dto.getCorreo());
+        }
+        com.huellago.backend.security.ValidacionCuenta.exigir(dto);
         Usuario usuario = buscarPorCorreo(correoAutenticado);
         if (usuario == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
+        }
+
+        usuarioRepository.bloquearParaRecomendaciones(usuario.getId()).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+        entityManager.refresh(usuario);
+        if (!com.huellago.backend.security.ValidacionCuenta.correo(correoAutenticado)
+                .equals(com.huellago.backend.security.ValidacionCuenta.correo(usuario.getCorreo()))) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Debe iniciar sesión nuevamente");
         }
 
         String nombres = dto.getNombres().trim();
@@ -138,8 +148,15 @@ public class UsuarioServiceImpl implements UsuarioService {
         usuario.setCorreo(correo);
         usuario.setFechaActualizacion(LocalDateTime.now());
 
-        Usuario usuarioActualizado = usuarioRepository.save(usuario);
+        Usuario usuarioActualizado;
+        try {
+            usuarioActualizado = usuarioRepository.save(usuario);
+            usuarioRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException error) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya está registrado");
+        }
         if (cambioCorreo) {
+            recuperaciones.eliminarDelUsuario(usuario.getId());
             List<Sesion> sesionesActivas = sesionRepository
                     .findByUsuario_IdAndActivaTrue(usuario.getId());
             sesionesActivas.forEach(sesion -> sesion.setActiva(false));

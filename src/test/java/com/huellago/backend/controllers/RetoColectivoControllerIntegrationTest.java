@@ -87,11 +87,11 @@ class RetoColectivoControllerIntegrationTest {
 
     @Test
     void sinJwtNoAccedeNiModifica() throws Exception {
-        mvc.perform(get("/retos/colectivos")).andExpect(status().isForbidden());
-        mvc.perform(post("/retos/colectivos/7/unirse")).andExpect(status().isForbidden());
+        mvc.perform(get("/retos/colectivos")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/retos/colectivos/7/unirse")).andExpect(status().isUnauthorized());
         mvc.perform(put("/retos/colectivos/participaciones/51/progreso")
                         .contentType("application/json").content("{\"progreso\":50}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(servicio);
     }
 

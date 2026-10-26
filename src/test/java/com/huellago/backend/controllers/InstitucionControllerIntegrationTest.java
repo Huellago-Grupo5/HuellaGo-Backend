@@ -83,10 +83,10 @@ class InstitucionControllerIntegrationTest {
     @Test
     void exigeJwtValidoParaRegistroYAdministracion() throws Exception {
         mvc.perform(post("/instituciones").contentType("application/json").content(json("UNIVERSIDAD")))
-                .andExpect(status().isForbidden());
-        mvc.perform(get("/instituciones/7/administracion")).andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/instituciones/7/administracion")).andExpect(status().isUnauthorized());
         mvc.perform(get("/instituciones/7/administracion").header("Authorization", "Bearer invalido"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(servicio);
     }
 

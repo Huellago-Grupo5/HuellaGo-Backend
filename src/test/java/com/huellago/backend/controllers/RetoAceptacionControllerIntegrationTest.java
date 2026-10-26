@@ -72,9 +72,9 @@ class RetoAceptacionControllerIntegrationTest {
 
     @Test
     void sinJwtOConJwtInvalidoNoAccede() throws Exception {
-        mvc.perform(post("/retos/7/aceptar")).andExpect(status().isForbidden());
+        mvc.perform(post("/retos/7/aceptar")).andExpect(status().isUnauthorized());
         mvc.perform(post("/retos/7/aceptar").header("Authorization", "Bearer invalido"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(retos);
     }
 

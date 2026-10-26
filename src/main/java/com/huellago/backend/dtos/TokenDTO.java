@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class TokenDTO {
+    @lombok.ToString.Exclude
     private String token;
     private Long id;
     private String correo;

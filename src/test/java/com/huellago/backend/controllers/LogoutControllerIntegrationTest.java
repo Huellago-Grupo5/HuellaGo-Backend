@@ -64,7 +64,7 @@ class LogoutControllerIntegrationTest {
 
     @Test
     void logoutSinJwtEsRechazado() throws Exception {
-        mvc.perform(post("/auth/logout")).andExpect(status().isForbidden());
+        mvc.perform(post("/auth/logout")).andExpect(status().isUnauthorized());
         verify(sesionService, never()).cerrarSesion(org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyString());
     }
