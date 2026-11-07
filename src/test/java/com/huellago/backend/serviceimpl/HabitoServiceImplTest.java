@@ -33,6 +33,8 @@ import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class HabitoServiceImplTest {
+    @org.junit.jupiter.api.BeforeEach void simularBloqueoUsuario() { org.mockito.Mockito.lenient().when(usuarioRepository.bloquearParaRecomendaciones(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(i -> Optional.of(i.getArgument(0))); }
+
     @Mock org.springframework.context.ApplicationEventPublisher eventos;
 
     @Mock
@@ -106,6 +108,32 @@ class HabitoServiceImplTest {
 
         assertEquals(409, energiaException.getStatusCode().value());
         assertEquals(409, alimentacionException.getStatusCode().value());
+        verify(habitoRepository, never()).save(any(Habito.class));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "Transporte,transporte", "Energía,energía", "Alimentación,alimentación", "Residuos,residuos"
+    })
+    void duplicadosDevuelvenMensajeAmigableSinGuardar(String categoriaDuplicada, String nombreVisible) {
+        for (String nombre : List.of("Transporte", "Energía", "Alimentación", "Residuos")) {
+            lenient().when(categoriaHabitoRepository.findByNombreIgnoreCase(nombre))
+                    .thenReturn(categoria(1L, nombre));
+        }
+        when(habitoRepository.countByUsuario_IdAndCategoria_NombreIgnoreCase(eq(1L), any(String.class)))
+                .thenAnswer(invocation -> categoriaDuplicada.equals(invocation.getArgument(1)) ? 1L : 0L);
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class, () -> {
+            switch (categoriaDuplicada) {
+                case "Transporte" -> service.registrarTransporte(new TransporteDTO(1L, "Bus", BigDecimal.TEN, 5));
+                case "Energía" -> service.registrarEnergia(new EnergiaDTO(1L, "Casa", 3, "Electricidad"));
+                default -> service.registrarAlimentacionResiduos(new AlimentacionResiduosDTO(1L, "Mixta", "Medio", true));
+            }
+        });
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals("Ya registraste tus hábitos de " + nombreVisible
+                + ". Puedes actualizar esta información cuando lo necesites.", error.getReason());
         verify(habitoRepository, never()).save(any(Habito.class));
     }
 

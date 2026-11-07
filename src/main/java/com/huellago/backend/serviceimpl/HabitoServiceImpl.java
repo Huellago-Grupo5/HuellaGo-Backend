@@ -47,10 +47,13 @@ public class HabitoServiceImpl implements HabitoService {
     @Override
     @Transactional
     public TransporteRespuestaDTO registrarTransporte(TransporteDTO dto) {
+        validarNoNulo(dto, "solicitud");
         validarNoNulo(dto.getUsuarioId(), "usuarioId");
         validarPermitido(dto.getMedio(), Set.of("Bicicleta", "Caminando", "Bus", "Auto", "Moto"), "medio");
         validarPositivo(dto.getKmSemana(), "kmSemana");
         validarPositivo(dto.getDiasSemana(), "diasSemana");
+        if (dto.getDiasSemana() > 7) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "diasSemana debe ser un número entero entre 1 y 7");
 
         Usuario usuario = buscarUsuario(dto.getUsuarioId());
         CategoriaHabito categoria = buscarCategoria("Transporte");
@@ -72,10 +75,15 @@ public class HabitoServiceImpl implements HabitoService {
     @Override
     @Transactional
     public EnergiaRespuestaDTO registrarEnergia(EnergiaDTO dto) {
+        validarNoNulo(dto, "solicitud");
         validarNoNulo(dto.getUsuarioId(), "usuarioId");
         validarPermitido(dto.getVivienda(), Set.of("Casa", "Departamento"), "vivienda");
         validarPositivo(dto.getPersonas(), "personas");
         validarPermitido(dto.getFuente(), Set.of("Electricidad", "Gas", "Solar"), "fuente");
+        if (dto.getConsumoKwhDiario() != null && (dto.getConsumoKwhDiario().signum() < 0
+                || !"Electricidad".equalsIgnoreCase(dto.getFuente())))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "consumoKwhDiario debe ser no negativo y requiere Electricidad");
 
         Usuario usuario = buscarUsuario(dto.getUsuarioId());
         CategoriaHabito categoria = buscarCategoria("Energía");
@@ -83,20 +91,25 @@ public class HabitoServiceImpl implements HabitoService {
         guardarHabito(usuario, categoria, "vivienda", BigDecimal.ZERO, dto.getVivienda());
         guardarHabito(usuario, categoria, "personas", BigDecimal.valueOf(dto.getPersonas()), "personas");
         guardarHabito(usuario, categoria, "fuente", BigDecimal.ZERO, dto.getFuente());
+        if (dto.getConsumoKwhDiario() != null)
+            guardarHabito(usuario, categoria, "consumoKwhDiario", dto.getConsumoKwhDiario(), "kWh/dia");
         eventos.publishEvent(new InformacionAmbientalActualizada(usuario.getId()));
 
-        return new EnergiaRespuestaDTO(
+        EnergiaRespuestaDTO respuesta = new EnergiaRespuestaDTO(
                 usuario.getId(),
                 categoria.getId(),
                 dto.getVivienda(),
                 dto.getPersonas(),
                 dto.getFuente()
         );
+        respuesta.setConsumoKwhDiario(dto.getConsumoKwhDiario());
+        return respuesta;
     }
 
     @Override
     @Transactional
     public AlimentacionResiduosRespuestaDTO registrarAlimentacionResiduos(AlimentacionResiduosDTO dto) {
+        validarNoNulo(dto, "solicitud");
         validarNoNulo(dto.getUsuarioId(), "usuarioId");
         validarPermitido(dto.getTipo(), Set.of("Vegana", "Vegetariana", "Mixta"), "tipo");
         validarPermitido(dto.getPlasticos(), Set.of("Bajo", "Medio", "Alto"), "plasticos");
@@ -113,7 +126,7 @@ public class HabitoServiceImpl implements HabitoService {
                 dto.getReciclas() ? BigDecimal.ONE : BigDecimal.ZERO, "boolean");
         eventos.publishEvent(new InformacionAmbientalActualizada(usuario.getId()));
 
-        return new AlimentacionResiduosRespuestaDTO(
+        AlimentacionResiduosRespuestaDTO respuesta = new AlimentacionResiduosRespuestaDTO(
                 usuario.getId(),
                 alimentacion.getId(),
                 residuos.getId(),
@@ -121,6 +134,10 @@ public class HabitoServiceImpl implements HabitoService {
                 dto.getPlasticos(),
                 dto.getReciclas()
         );
+        var pendientes = ValidacionHabitosIniciales.categoriasPendientes(habitoRepository.findByUsuario_Id(usuario.getId()));
+        respuesta.setCategoriasPendientes(pendientes);
+        respuesta.setConfiguracionInicialCompleta(pendientes.isEmpty());
+        return respuesta;
     }
 
     @Override
@@ -132,6 +149,8 @@ public class HabitoServiceImpl implements HabitoService {
                     "Nombre, valor y unidad son obligatorios");
         }
 
+        usuarioRepository.bloquearParaRecomendaciones(usuario.getId()).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND,"Usuario no encontrado"));
         Habito habito = habitoRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Hábito no encontrado"));
@@ -158,6 +177,8 @@ public class HabitoServiceImpl implements HabitoService {
     }
 
     private Usuario buscarUsuario(Long usuarioId) {
+        usuarioRepository.bloquearParaRecomendaciones(usuarioId).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND,"Usuario no encontrado"));
         Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
         if (usuario == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
@@ -185,8 +206,8 @@ public class HabitoServiceImpl implements HabitoService {
         if (habitoRepository.countByUsuario_IdAndCategoria_NombreIgnoreCase(
                 usuarioId, categoria.getNombre()) > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "La categoría " + nombreCategoria
-                            + " ya está registrada; utilice PUT /habitos/{id} para actualizarla");
+                    "Ya registraste tus hábitos de " + nombreCategoria.toLowerCase(Locale.ROOT)
+                            + ". Puedes actualizar esta información cuando lo necesites.");
         }
     }
 
@@ -219,11 +240,10 @@ public class HabitoServiceImpl implements HabitoService {
         String nombre = dto.getNombre().trim().toLowerCase(Locale.ROOT);
         String nombreActual = habito.getNombre() == null ? "" : habito.getNombre().toLowerCase(Locale.ROOT);
         BigDecimal valor = dto.getValor();
-        String unidad = dto.getUnidad().trim().toLowerCase(Locale.ROOT);
 
         Set<String> nombresPermitidos = switch (categoria) {
             case "transporte" -> Set.of("medio", "kmsemana", "diassemana");
-            case "energia" -> Set.of("vivienda", "personas", "fuente");
+            case "energia" -> Set.of("vivienda", "personas", "fuente", "consumokwhdiario");
             case "alimentacion" -> Set.of("tipo");
             case "residuos" -> Set.of("plasticos", "reciclas");
             default -> Set.of();
@@ -241,28 +261,23 @@ public class HabitoServiceImpl implements HabitoService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "diasSemana debe ser un número entero entre 1 y 7");
         }
-        boolean valido = switch (nombre) {
-            case "medio" -> valor.signum() == 0
-                    && Set.of("bicicleta", "caminando", "bus", "auto", "moto").contains(unidad);
-            case "vivienda" -> valor.signum() == 0
-                    && Set.of("casa", "departamento").contains(unidad);
-            case "fuente" -> valor.signum() == 0
-                    && Set.of("electricidad", "gas", "solar").contains(unidad);
-            case "tipo" -> valor.signum() == 0
-                    && Set.of("vegana", "vegetariana", "mixta").contains(unidad);
-            case "plasticos" -> valor.signum() == 0
-                    && Set.of("bajo", "medio", "alto").contains(unidad);
-            case "kmsemana" -> valor.signum() > 0 && "km/semana".equals(unidad);
-            case "diassemana" -> entero && valor.signum() > 0
-                    && valor.compareTo(BigDecimal.valueOf(7)) <= 0 && "dias/semana".equals(unidad);
-            case "personas" -> entero && valor.signum() > 0 && "personas".equals(unidad);
-            case "reciclas" -> entero && (valor.signum() == 0 || valor.compareTo(BigDecimal.ONE) == 0)
-                    && "boolean".equals(unidad);
-            default -> false;
+        Habito candidato = new Habito();
+        candidato.setNombre(habito.getNombre()); candidato.setValor(valor); candidato.setUnidad(dto.getUnidad());
+        String campo = switch (nombre) {
+            case "kmsemana" -> "kmSemana";
+            case "diassemana" -> "diasSemana";
+            case "consumokwhdiario" -> "consumoKwhDiario";
+            default -> nombre;
         };
-        if (!valido) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Valor o unidad inválidos para " + habito.getNombre());
+        ValidacionHabitosIniciales.validarCampo(java.util.List.of(candidato), campo);
+        if ("energia".equals(categoria)) {
+            var datos = new java.util.ArrayList<>(habitoRepository.findByUsuario_Id(habito.getUsuario().getId()));
+            if (datos.stream().anyMatch(h -> "consumoKwhDiario".equalsIgnoreCase(h.getNombre()))) {
+                datos.removeIf(h -> h.getId() != null && h.getId().equals(habito.getId()));
+                candidato.setCategoria(habito.getCategoria()); datos.add(candidato);
+                if (ValidacionHabitosIniciales.categoriasPendientes(datos).contains("Energía"))
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"El consumo en kWh/dia requiere energía completa y fuente Electricidad");
+            }
         }
     }
 
@@ -280,6 +295,8 @@ public class HabitoServiceImpl implements HabitoService {
     }
 
     private void validarNoNulo(Object valor, String campo) {
+        if ("usuarioId".equals(campo) && valor instanceof Long id && id <= 0)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"usuarioId debe ser positivo");
         if (valor == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El campo " + campo + " es obligatorio");
         }
@@ -287,7 +304,7 @@ public class HabitoServiceImpl implements HabitoService {
 
     private void validarPositivo(Number valor, String campo) {
         validarNoNulo(valor, campo);
-        if (valor.doubleValue() <= 0) {
+        if (valor instanceof BigDecimal decimal ? decimal.signum() <= 0 : valor.longValue() <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El campo " + campo + " debe ser positivo");
         }
     }

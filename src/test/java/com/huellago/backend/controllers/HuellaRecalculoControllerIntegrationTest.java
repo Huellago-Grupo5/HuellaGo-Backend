@@ -43,10 +43,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(HuellaCarbonoController.class)
 @Import({SecurityConfiguration.class, JwtRequestFilter.class,
-        HuellaCarbonoServiceImpl.class, HuellaCarbonoErrorHandler.class})
+        HuellaCarbonoServiceImpl.class, com.huellago.backend.serviceimpl.PoliticaMedicionInicial.class,
+        HuellaCarbonoErrorHandler.class})
 @ImportAutoConfiguration({SecurityAutoConfiguration.class,
         ServletWebSecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class})
 class HuellaRecalculoControllerIntegrationTest {
+    @org.junit.jupiter.api.BeforeEach void simularBloqueoUsuario() { when(usuarios.bloquearParaRecomendaciones(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(i -> Optional.of(i.getArgument(0))); }
+
     @Autowired MockMvc mvc;
     @MockitoBean HuellaCarbonoRepository huellas;
     @MockitoBean HabitoRepository habitos;

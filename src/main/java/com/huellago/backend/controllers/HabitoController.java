@@ -36,7 +36,7 @@ public class HabitoController {
 
     @PostMapping("/transporte")
     public ResponseEntity<TransporteRespuestaDTO> registrarTransporte(
-            @RequestBody TransporteDTO transporteDTO,
+            @jakarta.validation.Valid @RequestBody TransporteDTO transporteDTO,
             @AuthenticationPrincipal UserSecurity userSecurity) {
         usuarioAuthorizationService.validarPropietario(transporteDTO.getUsuarioId(), userSecurity);
         return new ResponseEntity<>(habitoService.registrarTransporte(transporteDTO), HttpStatus.CREATED);
@@ -44,7 +44,7 @@ public class HabitoController {
 
     @PostMapping("/energia")
     public ResponseEntity<EnergiaRespuestaDTO> registrarEnergia(
-            @RequestBody EnergiaDTO energiaDTO,
+            @jakarta.validation.Valid @RequestBody EnergiaDTO energiaDTO,
             @AuthenticationPrincipal UserSecurity userSecurity) {
         usuarioAuthorizationService.validarPropietario(energiaDTO.getUsuarioId(), userSecurity);
         return new ResponseEntity<>(habitoService.registrarEnergia(energiaDTO), HttpStatus.CREATED);
@@ -52,7 +52,7 @@ public class HabitoController {
 
     @PostMapping("/alimentacion-residuos")
     public ResponseEntity<AlimentacionResiduosRespuestaDTO> registrarAlimentacionResiduos(
-            @RequestBody AlimentacionResiduosDTO dto,
+            @jakarta.validation.Valid @RequestBody AlimentacionResiduosDTO dto,
             @AuthenticationPrincipal UserSecurity userSecurity) {
         usuarioAuthorizationService.validarPropietario(dto.getUsuarioId(), userSecurity);
         return new ResponseEntity<>(

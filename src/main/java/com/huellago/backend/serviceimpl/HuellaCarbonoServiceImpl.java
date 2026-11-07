@@ -40,6 +40,9 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
     @Autowired
     ApplicationEventPublisher eventos;
 
+    @Autowired
+    PoliticaMedicionInicial politica;
+
     private static final String UNIDAD_HUELLA = "kg CO2e";
     private static final String PERIODO_HUELLA = "semanal";
 
@@ -82,6 +85,8 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
         }
 
+        usuarioRepository.bloquearParaRecomendaciones(usuarioId).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
         List<Habito> habitos = habitoRepository.findByUsuario_Id(usuarioId);
         Map<String, List<Habito>> habitosPorCategoria = habitos.stream()
                 .filter(habito -> habito.getCategoria() != null
@@ -101,6 +106,9 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
         }
 
         validarHabitos(habitosPorCategoria);
+        List<String> incompletas = ValidacionHabitosIniciales.categoriasPendientes(habitos);
+        if (!incompletas.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Categorías incompletas o inválidas: " + String.join(", ", incompletas));
 
         BigDecimal co2Transporte = calcularTransporte(requerirCategoria(habitosPorCategoria, "transporte"));
         BigDecimal co2Energia = calcularEnergia(requerirCategoria(habitosPorCategoria, "energia"));
@@ -108,6 +116,7 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
         BigDecimal co2Residuos = calcularResiduos(requerirCategoria(habitosPorCategoria, "residuos"));
         BigDecimal co2Total = co2Transporte.add(co2Energia).add(co2Alimentacion).add(co2Residuos);
 
+        politica.nivel(co2Total); // Valida la politica antes de intentar persistir.
         HuellaCarbono huellaCarbono = new HuellaCarbono();
         huellaCarbono.setUsuario(usuario);
         huellaCarbono.setCo2Transporte(co2Transporte);
@@ -141,47 +150,7 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
     }
 
     private void validarCampo(List<Habito> habitos, String nombre) {
-        List<Habito> encontrados = habitos.stream()
-                .filter(habito -> nombre.equalsIgnoreCase(habito.getNombre()))
-                .toList();
-        if (encontrados.size() != 1) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    encontrados.isEmpty() ? "Falta el hábito " + nombre
-                            : "Hay registros duplicados del hábito " + nombre);
-        }
-        Habito habito = encontrados.get(0);
-        BigDecimal valor = habito.getValor();
-        String unidad = habito.getUnidad() == null ? ""
-                : habito.getUnidad().trim().toLowerCase(Locale.ROOT);
-        if (valor == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Falta el valor del hábito " + nombre);
-        }
-        boolean entero = valor.stripTrailingZeros().scale() <= 0;
-        boolean valido = switch (nombre) {
-            case "medio" -> valor.signum() == 0
-                    && Set.of("bicicleta", "caminando", "bus", "auto", "moto").contains(unidad);
-            case "kmSemana" -> valor.signum() > 0 && "km/semana".equals(unidad);
-            case "diasSemana" -> entero && valor.signum() > 0
-                    && valor.compareTo(BigDecimal.valueOf(7)) <= 0 && "dias/semana".equals(unidad);
-            case "vivienda" -> valor.signum() == 0
-                    && Set.of("casa", "departamento").contains(unidad);
-            case "personas" -> entero && valor.signum() > 0 && "personas".equals(unidad);
-            case "fuente" -> valor.signum() == 0
-                    && Set.of("electricidad", "gas", "solar").contains(unidad);
-            case "tipo" -> valor.signum() == 0
-                    && Set.of("vegana", "vegetariana", "mixta").contains(unidad);
-            case "plasticos" -> valor.signum() == 0
-                    && Set.of("bajo", "medio", "alto").contains(unidad);
-            case "reciclas" -> entero
-                    && (valor.signum() == 0 || valor.compareTo(BigDecimal.ONE) == 0)
-                    && "boolean".equals(unidad);
-            default -> false;
-        };
-        if (!valido) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Valor o unidad inválidos para " + nombre);
-        }
+        ValidacionHabitosIniciales.validarCampo(habitos, nombre);
     }
 
     private BigDecimal calcularTransporte(List<Habito> habitos) {
@@ -199,6 +168,11 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
     }
 
     private BigDecimal calcularEnergia(List<Habito> habitos) {
+        var consumos = habitos.stream().filter(h -> "consumoKwhDiario".equalsIgnoreCase(h.getNombre())).toList();
+        if (!consumos.isEmpty()) {
+            validarCampo(habitos, "consumoKwhDiario");
+            return politica.consumoElectricoSemanal(consumos.get(0).getValor());
+        }
         String vivienda = valorTexto(requerirHabito(habitos, "vivienda"));
         BigDecimal personas = valorNumerico(requerirHabito(habitos, "personas"));
         String fuente = valorTexto(requerirHabito(habitos, "fuente"));
@@ -286,12 +260,15 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
     }
 
     private HuellaCarbonoRespuestaDTO convertirADTO(HuellaCarbono huellaCarbono) {
-        return new HuellaCarbonoRespuestaDTO(
+        HuellaCarbonoRespuestaDTO respuesta = new HuellaCarbonoRespuestaDTO(
                 huellaCarbono.getUsuario().getId(), huellaCarbono.getCo2Total(),
                 huellaCarbono.getCo2Transporte(), huellaCarbono.getCo2Energia(),
                 huellaCarbono.getCo2Alimentacion(), huellaCarbono.getCo2Residuos(),
                 huellaCarbono.getFechaCalculo()
         );
+        respuesta.setNivelImpacto(politica.nivel(huellaCarbono.getCo2Total()));
+        respuesta.setReferenciaImpacto(politica.referenciaImpacto());
+        return respuesta;
     }
 
     @Override
@@ -306,15 +283,7 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Huella de carbono no encontrada");
         }
 
-        return new HuellaCarbonoRespuestaDTO(
-                huellaCarbono.getUsuario().getId(),
-                huellaCarbono.getCo2Total(),
-                huellaCarbono.getCo2Transporte(),
-                huellaCarbono.getCo2Energia(),
-                huellaCarbono.getCo2Alimentacion(),
-                huellaCarbono.getCo2Residuos(),
-                huellaCarbono.getFechaCalculo()
-        );
+        return convertirADTO(huellaCarbono);
     }
 
     @Override

@@ -34,6 +34,9 @@ import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class HuellaCarbonoServiceImplTest {
+    @org.mockito.Spy PoliticaMedicionInicial politica = new PoliticaMedicionInicial();
+    @org.junit.jupiter.api.BeforeEach void simularBloqueoUsuario() { org.mockito.Mockito.lenient().when(usuarioRepository.bloquearParaRecomendaciones(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(i -> Optional.of(i.getArgument(0))); }
+
     @Mock org.springframework.context.ApplicationEventPublisher eventos;
 
     @Mock

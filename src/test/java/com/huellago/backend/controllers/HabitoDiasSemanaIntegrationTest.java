@@ -46,6 +46,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ImportAutoConfiguration({SecurityAutoConfiguration.class,
         ServletWebSecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class})
 class HabitoDiasSemanaIntegrationTest {
+    @org.junit.jupiter.api.BeforeEach void simularBloqueoUsuario() { when(usuarios.bloquearParaRecomendaciones(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(i -> Optional.of(i.getArgument(0))); }
+
     @Autowired MockMvc mvc;
     @MockitoBean HabitoRepository habitos;
     @MockitoBean UsuarioRepository usuarios;
