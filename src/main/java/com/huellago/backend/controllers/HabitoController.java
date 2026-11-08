@@ -34,6 +34,12 @@ public class HabitoController {
     @Autowired
     UsuarioAuthorizationService usuarioAuthorizationService;
 
+    @org.springframework.web.bind.annotation.GetMapping
+    public ResponseEntity<java.util.List<HabitoRespuestaDTO>> listar(
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(habitoService.listar(userSecurity.getUser()));
+    }
+
     @PostMapping("/transporte")
     public ResponseEntity<TransporteRespuestaDTO> registrarTransporte(
             @jakarta.validation.Valid @RequestBody TransporteDTO transporteDTO,

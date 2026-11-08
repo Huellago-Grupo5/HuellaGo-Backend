@@ -48,6 +48,7 @@ class ObjetivoAmbientalServiceImplTest {
         usuario.setId(22L);
         usuario.setCorreo("usuario@huellago.com");
         when(usuarios.findByCorreo(usuario.getCorreo())).thenReturn(usuario);
+        org.mockito.Mockito.lenient().when(usuarios.bloquearParaRecomendaciones(22L)).thenReturn(java.util.Optional.of(22L));
 
         Map<Long, ObjetivoAmbiental> catalogo = Map.of(
                 1L, objetivo(1L), 2L, objetivo(2L), 3L, objetivo(3L), 4L, objetivo(4L));
@@ -81,6 +82,7 @@ class ObjetivoAmbientalServiceImplTest {
         usuario.setId(22L);
         usuario.setCorreo("usuario@huellago.com");
         when(usuarios.findByCorreo(usuario.getCorreo())).thenReturn(usuario);
+        org.mockito.Mockito.lenient().when(usuarios.bloquearParaRecomendaciones(22L)).thenReturn(java.util.Optional.of(22L));
         when(objetivos.findAllById(List.of(2L, 99999L))).thenReturn(List.of(objetivo(2L)));
 
         SeleccionObjetivosAmbientalesDTO dto = new SeleccionObjetivosAmbientalesDTO();
@@ -90,9 +92,21 @@ class ObjetivoAmbientalServiceImplTest {
                 () -> service.actualizarSeleccion(usuario.getCorreo(), dto));
 
         assertEquals(404, error.getStatusCode().value());
+        assertEquals("Uno o más objetivos ambientales seleccionados no existen.", error.getReason());
         verify(selecciones, never()).findByUsuarioId(22L);
         verify(selecciones, never()).deleteAll(anyList());
         verify(selecciones, never()).saveAll(anyList());
+    }
+
+    @Test
+    void seleccionVaciaConserva400ConMensajeAmigableSinAccederAPersistencia() {
+        SeleccionObjetivosAmbientalesDTO dto = new SeleccionObjetivosAmbientalesDTO();
+        dto.setObjetivoIds(List.of());
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.actualizarSeleccion("usuario@huellago.com", dto));
+        assertEquals(400, error.getStatusCode().value());
+        assertEquals("Debes seleccionar al menos un objetivo ambiental.", error.getReason());
+        org.mockito.Mockito.verifyNoInteractions(usuarios, objetivos, selecciones);
     }
 
     private void guardar(List<Long> ids, Usuario usuario, Map<Long, ObjetivoAmbiental> catalogo,

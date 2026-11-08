@@ -5,6 +5,6 @@ import lombok.Data;
 import java.util.List;
 @Data
 public class SeleccionObjetivosAmbientalesDTO {
-    @NotEmpty(message = "Debe seleccionar al menos un objetivo ambiental")
+    @NotEmpty(message = "Debes seleccionar al menos un objetivo ambiental.")
     private List<@NotNull(message = "El identificador del objetivo es obligatorio") Long> objetivoIds;
 }

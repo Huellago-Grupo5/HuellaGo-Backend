@@ -36,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(ObjetivoAmbientalController.class)
-@Import({SecurityConfiguration.class, JwtRequestFilter.class})
+@Import({SecurityConfiguration.class, JwtRequestFilter.class, ObjetivoAmbientalErrorHandler.class})
 @ImportAutoConfiguration({SecurityAutoConfiguration.class,
         ServletWebSecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class})
 class ObjetivoAmbientalControllerIntegrationTest {
@@ -64,7 +64,10 @@ class ObjetivoAmbientalControllerIntegrationTest {
                         .with(authentication(autenticacion()))
                         .contentType("application/json")
                         .content("{\"objetivoIds\":[]}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().json(
+                        "{\"mensaje\":\"Debes seleccionar al menos un objetivo ambiental.\"}",
+                        org.springframework.test.json.JsonCompareMode.STRICT));
 
         verify(service, never()).actualizarSeleccion(any(), any());
     }
@@ -73,13 +76,28 @@ class ObjetivoAmbientalControllerIntegrationTest {
     void objetivoInexistenteDevuelve404() throws Exception {
         when(service.actualizarSeleccion(eq(CORREO), any()))
                 .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "El objetivo ambiental no existe: 99999"));
+                        "Uno o más objetivos ambientales seleccionados no existen."));
 
         mvc.perform(put("/usuarios/me/objetivos")
                         .with(authentication(autenticacion()))
                         .contentType("application/json")
-                        .content("{\"objetivoIds\":[99999]}"))
-                .andExpect(status().isNotFound());
+                        .content("{\"objetivoIds\":[2,999999]}"))
+                .andExpect(status().isNotFound())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().json(
+                        "{\"mensaje\":\"Uno o más objetivos ambientales seleccionados no existen.\"}",
+                        org.springframework.test.json.JsonCompareMode.STRICT));
+    }
+
+    @Test
+    void falloDeInfraestructuraDevuelve503SinDetallesInternos() throws Exception {
+        when(service.actualizarSeleccion(eq(CORREO), any())).thenThrow(
+                new org.springframework.dao.DataAccessResourceFailureException("SQL y detalles internos"));
+        mvc.perform(put("/usuarios/me/objetivos").with(authentication(autenticacion()))
+                        .contentType("application/json").content("{\"objetivoIds\":[2]}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().json(
+                        "{\"mensaje\":\"No se pudo procesar la selección de objetivos ambientales en este momento.\"}",
+                        org.springframework.test.json.JsonCompareMode.STRICT));
     }
 
     @Test
@@ -95,6 +113,15 @@ class ObjetivoAmbientalControllerIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(2))
                 .andExpect(jsonPath("$[1].id").value(4));
+    }
+
+    @Test
+    void identificadorNuloConservaSuValidacionSinConfundirloConSeleccionVacia() throws Exception {
+        mvc.perform(put("/usuarios/me/objetivos").with(authentication(autenticacion()))
+                        .contentType("application/json").content("{\"objetivoIds\":[null]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensaje").value("El identificador del objetivo es obligatorio"));
+        verify(service, never()).actualizarSeleccion(any(), any());
     }
 
     @Test

@@ -19,4 +19,11 @@ public class HabitoRespuestaDTO {
     private String unidad;
     private LocalDateTime fechaRegistro;
     private LocalDateTime fechaActualizacion;
+    private String categoriaNombre;
+
+    public HabitoRespuestaDTO(Long id, Long usuarioId, Long categoriaId, String nombre,
+                             BigDecimal valor, String unidad, LocalDateTime fechaRegistro,
+                             LocalDateTime fechaActualizacion) {
+        this(id, usuarioId, categoriaId, nombre, valor, unidad, fechaRegistro, fechaActualizacion, null);
+    }
 }

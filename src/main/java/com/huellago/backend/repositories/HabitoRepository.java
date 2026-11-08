@@ -10,6 +10,17 @@ public interface HabitoRepository extends JpaRepository<Habito, Long> {
 
     public java.util.List<Habito> findByUsuario_Id(Long usuarioId);
 
+    java.util.List<Habito> findByUsuario_IdOrderByIdAsc(Long usuarioId);
+
+    interface ConteoCategoria {
+        String getNombre();
+        Long getCantidad();
+    }
+
+    @Query("SELECT c.nombre AS nombre, COUNT(h) AS cantidad FROM Habito h LEFT JOIN h.categoria c "
+            + "WHERE h.usuario.id = :usuarioId GROUP BY c.nombre")
+    java.util.List<ConteoCategoria> contarPorCategoria(Long usuarioId);
+
     Optional<Habito> findByIdAndUsuario_Id(Long id, Long usuarioId);
 
     public Long countByUsuario_Id(Long usuarioId);

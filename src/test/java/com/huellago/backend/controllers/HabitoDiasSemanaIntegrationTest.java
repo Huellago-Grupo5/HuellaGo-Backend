@@ -96,6 +96,34 @@ class HabitoDiasSemanaIntegrationTest {
         verify(habitos).save(almacenado);
     }
 
+    @Test
+    void consultaYActualizaIdObtenidoYRechazaPropietarioAjeno() throws Exception {
+        var u = propietario(); var h = habito(u);
+        when(habitos.findByUsuario_IdOrderByIdAsc(22L)).thenReturn(java.util.List.of(h));
+        var consulta = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/habitos")
+                .param("usuarioId", "99").with(authentication(autenticacion(u))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].categoriaNombre").value("Transporte"))
+                .andExpect(jsonPath("$[0].usuarioId").value(22)).andReturn();
+        long id = new tools.jackson.databind.ObjectMapper().readTree(consulta.getResponse().getContentAsString()).get(0).get("id").asLong();
+        when(habitos.findById(id)).thenReturn(Optional.of(h)); when(habitos.save(h)).thenReturn(h);
+        mvc.perform(put("/habitos/" + id).with(authentication(autenticacion(u)))
+                .contentType("application/json").content("{\"nombre\":\"diasSemana\",\"valor\":6,\"unidad\":\"dias/semana\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.valor").value(6));
+        var ajeno = propietario(); ajeno.setId(99L); h.setUsuario(ajeno);
+        mvc.perform(put("/habitos/" + id).with(authentication(autenticacion(u)))
+                .contentType("application/json").content("{\"nombre\":\"diasSemana\",\"valor\":7,\"unidad\":\"dias/semana\"}"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.mensaje").exists());
+        assertEquals(new BigDecimal("6"), h.getValor());
+        verify(habitos, never()).findByUsuario_IdOrderByIdAsc(99L);
+    }
+
+    @Test void consultaFalloPersistenciaControlado() throws Exception {
+        when(habitos.findByUsuario_IdOrderByIdAsc(22L)).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("interno"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/habitos")
+                .with(authentication(autenticacion(propietario()))))
+                .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.mensaje").exists());
+    }
+
     private Usuario propietario() {
         Usuario usuario = new Usuario();
         usuario.setId(22L);

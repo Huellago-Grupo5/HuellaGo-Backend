@@ -410,7 +410,9 @@ public class HuellaCarbonoServiceImpl implements HuellaCarbonoService {
         actividades.add(new ActividadHuellaDTO("Energía", huellaCarbono.getCo2Energia()));
         actividades.add(new ActividadHuellaDTO("Alimentación", huellaCarbono.getCo2Alimentacion()));
         actividades.add(new ActividadHuellaDTO("Residuos", huellaCarbono.getCo2Residuos()));
-        actividades.sort(Comparator.comparing(ActividadHuellaDTO::getCo2).reversed());
+        // List.sort es estable: los empates conservan el orden canónico de arriba.
+        actividades.sort(Comparator.comparing(ActividadHuellaDTO::getCo2,
+                Comparator.nullsLast(Comparator.reverseOrder())));
 
         return new HuellaDesgloseDTO(
                 huellaCarbono.getUsuario().getId(),

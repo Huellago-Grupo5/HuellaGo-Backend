@@ -11,6 +11,7 @@ import com.huellago.backend.dtos.ActualizarHabitoDTO;
 import com.huellago.backend.entities.Usuario;
 
 public interface HabitoService {
+    java.util.List<HabitoRespuestaDTO> listar(Usuario usuario);
     public TransporteRespuestaDTO registrarTransporte(TransporteDTO transporteDTO);
     public EnergiaRespuestaDTO registrarEnergia(EnergiaDTO energiaDTO);
     public AlimentacionResiduosRespuestaDTO registrarAlimentacionResiduos(AlimentacionResiduosDTO dto);

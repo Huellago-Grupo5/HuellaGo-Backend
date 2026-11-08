@@ -131,6 +131,28 @@ class HuellaRecalculoControllerIntegrationTest {
         verifyNoInteractions(usuarios, habitos, huellas);
     }
 
+    @Test void desgloseHistoricoIncompletoDevuelve200YNullSinConvertirEnCero() throws Exception {
+        var u = usuario22(); var h = new HuellaCarbono(); h.setUsuario(u);
+        h.setCo2Total(BigDecimal.ONE); h.setCo2Transporte(BigDecimal.ZERO); h.setCo2Residuos(BigDecimal.ONE);
+        when(usuarios.existsById(22L)).thenReturn(true);
+        when(huellas.findTopByUsuario_IdOrderByFechaCalculoDescIdDesc(22L)).thenReturn(h);
+        mvc.perform(get("/huella-carbono/desglose/22").with(authentication(autenticacion(u))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.completo").value(false))
+                .andExpect(jsonPath("$.categoriasIncompletas.length()").value(2))
+                .andExpect(jsonPath("$.actividades.length()").value(4))
+                .andExpect(jsonPath("$.actividades[1].co2").value(0))
+                .andExpect(jsonPath("$.actividades[1].completa").value(true))
+                .andExpect(jsonPath("$.actividades[2].co2").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.actividades[2].completa").value(false));
+    }
+
+    @Test void desgloseAusenteEs404YSinJwt401() throws Exception {
+        when(usuarios.existsById(22L)).thenReturn(true);
+        mvc.perform(get("/huella-carbono/desglose/22").with(authentication(autenticacion(usuario22()))))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.mensaje").exists());
+        mvc.perform(get("/huella-carbono/desglose/22")).andExpect(status().isUnauthorized());
+    }
+
     private Usuario usuario22() {
         Usuario usuario = new Usuario();
         usuario.setId(22L);

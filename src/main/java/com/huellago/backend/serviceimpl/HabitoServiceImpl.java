@@ -45,6 +45,15 @@ public class HabitoServiceImpl implements HabitoService {
     CategoriaHabitoRepository categoriaHabitoRepository;
 
     @Override
+    @Transactional(readOnly = true)
+    public java.util.List<HabitoRespuestaDTO> listar(Usuario usuario) {
+        if (usuario == null || usuario.getId() == null)
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Autenticación requerida");
+        return habitoRepository.findByUsuario_IdOrderByIdAsc(usuario.getId()).stream()
+                .map(this::convertirADTO).toList();
+    }
+
+    @Override
     @Transactional
     public TransporteRespuestaDTO registrarTransporte(TransporteDTO dto) {
         validarNoNulo(dto, "solicitud");
@@ -229,9 +238,11 @@ public class HabitoServiceImpl implements HabitoService {
 
     private HabitoRespuestaDTO convertirADTO(Habito habito) {
         return new HabitoRespuestaDTO(
-                habito.getId(), habito.getUsuario().getId(), habito.getCategoria().getId(),
+                habito.getId(), habito.getUsuario().getId(),
+                habito.getCategoria() == null ? null : habito.getCategoria().getId(),
                 habito.getNombre(), habito.getValor(), habito.getUnidad(),
-                habito.getFechaRegistro(), habito.getFechaActualizacion()
+                habito.getFechaRegistro(), habito.getFechaActualizacion(),
+                habito.getCategoria() == null ? null : habito.getCategoria().getNombre()
         );
     }
 

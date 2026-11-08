@@ -73,6 +73,34 @@ class HabitoActualizarControllerIntegrationTest {
         verifyNoInteractions(servicio);
     }
 
+    @Test
+    void consultaPropiosIgnoraUsuarioIdAjenoYDevuelveIdsEditables() throws Exception {
+        var respuesta = new HabitoRespuestaDTO(10L, 22L, 12L, "reciclas", BigDecimal.ONE,
+                "boolean", LocalDateTime.now(), LocalDateTime.now());
+        respuesta.setCategoriaNombre("Residuos");
+        when(servicio.listar(any())).thenReturn(java.util.List.of(respuesta, respuesta));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/habitos")
+                .param("usuarioId", "99").with(authentication(autenticacion())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(10))
+                .andExpect(jsonPath("$[0].categoriaNombre").value("Residuos"));
+        verify(servicio).listar(argThat(u -> u.getId().equals(22L)));
+        when(servicio.actualizar(eq(10L), any(), any())).thenReturn(respuesta);
+        mvc.perform(put("/habitos/10").with(authentication(autenticacion()))
+                .contentType("application/json").content("{\"nombre\":\"reciclas\",\"valor\":1,\"unidad\":\"boolean\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(10));
+    }
+
+    @Test
+    void consultaVaciaYAccesoSinAutenticacion() throws Exception {
+        when(servicio.listar(any())).thenReturn(java.util.List.of());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/habitos")
+                .with(authentication(autenticacion())))
+                .andExpect(status().isOk()).andExpect(content().json("[]"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/habitos"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private UsernamePasswordAuthenticationToken autenticacion() {
         Usuario usuario = new Usuario();
         usuario.setId(22L);

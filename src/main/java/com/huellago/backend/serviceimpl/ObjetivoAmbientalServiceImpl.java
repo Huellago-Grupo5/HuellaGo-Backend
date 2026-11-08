@@ -23,20 +23,24 @@ public class ObjetivoAmbientalServiceImpl implements ObjetivoAmbientalService {
         Usuario usuario = usuario(correo);
         return selecciones.findByUsuarioId(usuario.getId()).stream().map(UsuarioObjetivoAmbiental::getObjetivo).map(this::dto).toList();
     }
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public List<ObjetivoAmbientalDTO> actualizarSeleccion(String correo, SeleccionObjetivosAmbientalesDTO seleccion) {
         if (seleccion == null || seleccion.getObjetivoIds() == null || seleccion.getObjetivoIds().isEmpty())
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debe seleccionar al menos un objetivo ambiental");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Debes seleccionar al menos un objetivo ambiental.");
         Usuario usuario = usuario(correo);
         List<Long> ids = new ArrayList<>(new LinkedHashSet<>(seleccion.getObjetivoIds()));
+        if (ids.stream().anyMatch(id -> id == null || id <= 0))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Los identificadores de objetivos deben ser positivos");
         List<ObjetivoAmbiental> encontrados = objetivos.findAllById(ids);
         Map<Long, ObjetivoAmbiental> porId = encontrados.stream().collect(Collectors.toMap(ObjetivoAmbiental::getId, o -> o));
         if (encontrados.size() != ids.size()) {
-            Long id = ids.stream().filter(i -> !porId.containsKey(i)).findFirst().orElse(null);
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "El objetivo ambiental no existe: " + id);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Uno o más objetivos ambientales seleccionados no existen.");
         }
 
         Set<Long> seleccionDeseada = new LinkedHashSet<>(ids);
+        // El bloqueo dura hasta commit/rollback y precede a la lectura de las asociaciones.
+        usuarios.bloquearParaRecomendaciones(usuario.getId()).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario autenticado no encontrado"));
         List<UsuarioObjetivoAmbiental> actuales = selecciones.findByUsuarioId(usuario.getId());
         Set<Long> actualesIds = actuales.stream()
                 .map(asociacion -> asociacion.getObjetivo().getId())
