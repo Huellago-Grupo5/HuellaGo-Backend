@@ -9,22 +9,36 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class PoliticaMedicionInicialTest {
     PoliticaMedicionInicial politica = new PoliticaMedicionInicial();
+    @Test void configuracionHabitualConservaFactorElectricoAprobadoParaUsoLocal() throws Exception {
+        var propiedades = new java.util.Properties();
+        try (var recurso = getClass().getClassLoader().getResourceAsStream("application.properties")) {
+            assertNotNull(recurso);
+            propiedades.load(recurso);
+        }
+        assertEquals("0.23825", propiedades.getProperty("huellago.medicion.electricidad.factor-kg-co2e-kwh"));
+        assertTrue(propiedades.getProperty("huellago.medicion.electricidad.referencia").contains("factor provisional no oficial"));
+    }
     void umbralesFicticiosDePrueba() {
         politica.limiteBajo="10"; politica.limiteMedio="20";
         politica.referencia="Politica ficticia para probar limites; sin significado cientifico";
     }
-    @Test void noInventaUnNivelSinUmbralesAprobados() {
-        assertEquals("NO_DEFINIDO",politica.nivel(BigDecimal.ZERO));
+    @Test void clasificacionAcademicaSemanalYDatosInvalidos() {
+        assertEquals("BAJO",politica.nivel(BigDecimal.ZERO));
+        assertEquals("BAJO",politica.nivel(new BigDecimal("34.99")));
+        assertEquals("MEDIO",politica.nivel(new BigDecimal("35")));
+        assertEquals("MEDIO",politica.nivel(new BigDecimal("69.99")));
+        assertEquals("ALTO",politica.nivel(new BigDecimal("70")));
         assertEquals("NO_DEFINIDO",politica.nivel(null));
         assertEquals("NO_DEFINIDO",politica.nivel(BigDecimal.ONE.negate()));
+        assertTrue(politica.referenciaImpacto().contains("no oficiales"));
     }
-    @Test void clasificaLimitesInclusivosConPoliticaExplicita() {
+    @Test void clasificaLimitesSuperioresExclusivosConPoliticaExplicita() {
         umbralesFicticiosDePrueba();
         assertEquals("BAJO",politica.nivel(BigDecimal.ZERO));
-        assertEquals("BAJO",politica.nivel(new BigDecimal("10")));
-        assertEquals("MEDIO",politica.nivel(new BigDecimal("10.01")));
-        assertEquals("MEDIO",politica.nivel(new BigDecimal("20")));
-        assertEquals("ALTO",politica.nivel(new BigDecimal("20.01")));
+        assertEquals("BAJO",politica.nivel(new BigDecimal("9.99")));
+        assertEquals("MEDIO",politica.nivel(new BigDecimal("10")));
+        assertEquals("MEDIO",politica.nivel(new BigDecimal("19.99")));
+        assertEquals("ALTO",politica.nivel(new BigDecimal("20")));
     }
     @ParameterizedTest @ValueSource(strings={"", "NaN", "-1", "10", "9"})
     void rechazaUmbralMedioAusenteInvalidoOIncompatible(String medio) {

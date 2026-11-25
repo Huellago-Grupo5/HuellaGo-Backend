@@ -1,6 +1,8 @@
 package com.huellago.backend.serviceimpl;
 
 import com.huellago.backend.entities.Insignia;
+import com.huellago.backend.entities.Reto;
+import com.huellago.backend.entities.CategoriaHabito;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.UsuarioInsignia;
 import com.huellago.backend.repositories.InsigniaRepository;
@@ -74,6 +76,33 @@ class InsigniaServiceImplTest {
         verify(obtenidas, never()).save(any());
         assertTrue(InsigniaServiceImpl.class.getMethod("obtenerInsignias", Usuario.class)
                 .getAnnotation(Transactional.class).readOnly());
+    }
+
+    @Test void retoDeTransporteOtorgaInsigniaSinPuntosYNoLaRepite() {
+        var u=usuario(0); var r=new Reto(); var categoria=new CategoriaHabito();
+        categoria.setNombre("Transporte"); r.setCategoria(categoria);
+        var insignia=insignia(87,0); insignia.setNombre("Reto de transporte completado");
+        insignia.setPuntosRequeridos(null);
+        when(catalogo.findFirstByNombreOrderByIdAsc("Reto de transporte completado"))
+                .thenReturn(java.util.Optional.of(insignia));
+        when(obtenidas.save(any())).thenAnswer(i->i.getArgument(0));
+        assertEquals("Reto de transporte completado",servicio.evaluarYDesbloquearPorReto(u,r).getFirst().getNombre());
+        when(obtenidas.existsByUsuario_IdAndInsignia_Id(22L,87)).thenReturn(true);
+        assertTrue(servicio.evaluarYDesbloquearPorReto(u,r).isEmpty());
+        verify(obtenidas,times(1)).save(any()); assertEquals(0,u.getEcoPuntos());
+    }
+
+    @Test void energiaAceptaNombreSinTildeYColectivoNoRecibeInsigniaIndividual() {
+        var u=usuario(0); var r=new Reto(); var categoria=new CategoriaHabito();
+        categoria.setNombre("Energia"); r.setCategoria(categoria);
+        var insignia=insignia(88,0); insignia.setNombre("Reto de energía completado"); insignia.setPuntosRequeridos(null);
+        when(catalogo.findFirstByNombreOrderByIdAsc("Reto de energía completado"))
+                .thenReturn(java.util.Optional.of(insignia));
+        when(obtenidas.save(any())).thenAnswer(i->i.getArgument(0));
+        assertEquals(1,servicio.evaluarYDesbloquearPorReto(u,r).size());
+        r.setTipo(com.huellago.backend.entities.TipoReto.COLECTIVO);
+        assertTrue(servicio.evaluarYDesbloquearPorReto(u,r).isEmpty());
+        verify(obtenidas,times(1)).save(any());
     }
 
     private Usuario usuario(int puntos) {

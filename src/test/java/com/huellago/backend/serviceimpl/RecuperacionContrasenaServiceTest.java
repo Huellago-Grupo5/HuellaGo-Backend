@@ -58,9 +58,9 @@ class RecuperacionContrasenaServiceTest {
         assertFalse(respuesta.toString().contains(token.getValue()));
         assertEquals(1, RecuperacionRespuestaDTO.class.getRecordComponents().length);
     }
-    @Test void correoInexistenteEs404SinTokenNiEnvio() {
-        assertEquals(404, assertThrows(ResponseStatusException.class,
-                () -> servicio.solicitar(new RecuperarContrasenaDTO(usuario.getCorreo()))).getStatusCode().value());
+    @Test void correoInexistenteRespondeIgualSinTokenNiEnvio() {
+        var respuesta = servicio.solicitar(new RecuperarContrasenaDTO(usuario.getCorreo()));
+        assertEquals("Si la cuenta existe, se enviara un enlace de recuperacion al correo registrado", respuesta.mensaje());
         verify(recuperaciones, never()).saveAndFlush(any()); verify(correo, never()).enviar(any(), any());
     }
     @Test void smtpAusenteNoGeneraSecretos() {

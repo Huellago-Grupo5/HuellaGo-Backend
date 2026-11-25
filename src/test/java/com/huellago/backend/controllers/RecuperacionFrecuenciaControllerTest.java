@@ -79,9 +79,9 @@ class RecuperacionFrecuenciaControllerTest {
         mvc.perform(solicitud("cuenta@example.invalid","192.0.2.1")).andExpect(status().isOk());
         verify(correo,times(2)).enviar(any(),any());
     }
-    @Test void inexistenteConserva404DentroDeCuotaYSeLimitaDespues()throws Exception{
+    @Test void inexistenteNoRevelaCuentaDentroDeCuotaYSeLimitaDespues()throws Exception{
         when(usuariosRepo.findByCorreoNormalizado("ausente@example.invalid")).thenReturn(null);
-        mvc.perform(solicitud("ausente@example.invalid","192.0.2.1")).andExpect(status().isNotFound());
+        mvc.perform(solicitud("ausente@example.invalid","192.0.2.1")).andExpect(status().isOk());
         mvc.perform(solicitud("ausente@example.invalid","192.0.2.1")).andExpect(status().isTooManyRequests());
         verify(correo,never()).enviar(any(),any());verifyNoInteractions(recuperaciones);
     }

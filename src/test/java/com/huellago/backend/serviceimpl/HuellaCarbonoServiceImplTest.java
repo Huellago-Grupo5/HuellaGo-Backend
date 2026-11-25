@@ -90,7 +90,14 @@ class HuellaCarbonoServiceImplTest {
         var resultado = service.calcularHuellaInicial(1L);
 
         assertEquals(0, resultado.getCo2Total().compareTo(new BigDecimal("10.5")));
-        verify(huellaCarbonoRepository).save(any());
+        var guardada = org.mockito.ArgumentCaptor.forClass(HuellaCarbono.class);
+        verify(huellaCarbonoRepository).save(guardada.capture());
+        assertEquals("HUELLAGO_SEMANAL_V1", guardada.getValue().getMetodologiaVersion());
+        assertEquals("semanal", guardada.getValue().getPeriodoCalculo());
+        assertEquals("kg CO2e", guardada.getValue().getUnidadCalculo());
+        assertEquals("PERSONAL_Y_HOGAR", guardada.getValue().getPerimetroCalculo());
+        assertTrue(guardada.getValue().getFactoresAplicados().contains("energia.kwh="));
+        assertTrue(guardada.getValue().getFactoresAplicados().length() <= 1000);
         verify(eventos).publishEvent(new com.huellago.backend.events.InformacionAmbientalActualizada(1L));
     }
 

@@ -1,5 +1,9 @@
 package com.huellago.backend.controllers;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import com.huellago.backend.dtos.ActualizarProgresoDTO;
 import com.huellago.backend.dtos.RetoColectivoDTO;
 import com.huellago.backend.dtos.UsuarioRetoRespuestaDTO;
@@ -16,21 +20,26 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Map;
 
+@Tag(name = "Retos colectivos", description = "Participación en retos colectivos vigentes; el resultado final se conserva tras el cierre.")
+@SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/retos/colectivos")
 public class RetoColectivoController {
     @Autowired RetoColectivoService servicio;
 
+    @Operation(summary = "Listar retos colectivos disponibles", description = "Listar retos colectivos disponibles. Participación en retos colectivos vigentes; el resultado final se conserva tras el cierre.")
     @GetMapping
     public List<RetoColectivoDTO> disponibles(@AuthenticationPrincipal UserSecurity autenticado) {
         return servicio.listarDisponibles(autenticado.getUser().getId());
     }
 
+    @Operation(summary = "Consultar reto colectivo", description = "Consultar reto colectivo. Participación en retos colectivos vigentes; el resultado final se conserva tras el cierre.")
     @GetMapping("/{id}")
     public RetoColectivoDTO consultar(@PathVariable Integer id, @AuthenticationPrincipal UserSecurity autenticado) {
         return servicio.obtener(id, autenticado.getUser().getId());
     }
 
+    @Operation(summary = "Unirse a reto colectivo", description = "Unirse a reto colectivo. Participación en retos colectivos vigentes; el resultado final se conserva tras el cierre.")
     @PostMapping("/{id}/unirse")
     public ResponseEntity<UsuarioRetoRespuestaDTO> unirse(@PathVariable Integer id,
             @AuthenticationPrincipal UserSecurity autenticado) {
@@ -38,6 +47,7 @@ public class RetoColectivoController {
                 .body(servicio.unirse(id, autenticado.getUser()));
     }
 
+    @Operation(summary = "Actualizar progreso colectivo propio", description = "Actualizar progreso colectivo propio. Participación en retos colectivos vigentes; el resultado final se conserva tras el cierre.")
     @PutMapping("/participaciones/{id}/progreso")
     public UsuarioRetoRespuestaDTO progreso(@PathVariable Integer id,
             @RequestBody ActualizarProgresoDTO dto,

@@ -44,6 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(HuellaCarbonoController.class)
 @Import({SecurityConfiguration.class, JwtRequestFilter.class,
         HuellaCarbonoServiceImpl.class, com.huellago.backend.serviceimpl.PoliticaMedicionInicial.class,
+        com.huellago.backend.serviceimpl.ConsultaHuellaConfiguration.class,
         HuellaCarbonoErrorHandler.class})
 @ImportAutoConfiguration({SecurityAutoConfiguration.class,
         ServletWebSecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class})

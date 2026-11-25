@@ -1,6 +1,8 @@
 package com.huellago.backend.controllers;
 
 import com.huellago.backend.dtos.GeneracionRecomendacionesDTO;
+import com.huellago.backend.dtos.RecomendacionPersonalizadaDTO;
+import com.huellago.backend.dtos.EscenarioImpactoIADTO;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.repositories.SesionRepository;
 import com.huellago.backend.security.JwtRequestFilter;
@@ -26,10 +28,12 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(RecomendacionController.class)
+@org.springframework.test.context.TestPropertySource(properties="huellago.jwt.secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 @Import({SecurityConfiguration.class, JwtRequestFilter.class, JwtUtilService.class})
 @ImportAutoConfiguration({SecurityAutoConfiguration.class,
         ServletWebSecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class})
@@ -57,6 +61,49 @@ class RecomendacionControllerIntegrationTest {
 
         verify(recomendacionService).generar(argThat(u -> u.getId().equals(22L)));
         verify(recomendacionService, never()).generar(argThat(u -> u.getId().equals(23L)));
+    }
+
+    @Test void pendientesUsaIdentidadJwtYFiltroSinGenerar() throws Exception {
+        String token = autenticar(true);
+        var item = new RecomendacionPersonalizadaDTO();
+        item.setUsuarioRecomendacionId(45); item.setCategoria("Transporte");
+        item.setTitulo("Titulo IA guardado"); item.setEstado("Pendiente");
+        when(recomendacionService.pendientes(argThat(u -> u.getId().equals(22L)), eq("Transporte")))
+                .thenReturn(List.of(item));
+        mvc.perform(get("/usuarios/me/recomendaciones").param("categoria", "Transporte")
+                        .param("usuarioId", "23").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].usuarioRecomendacionId").value(45))
+                .andExpect(jsonPath("$[0].titulo").value("Titulo IA guardado"));
+        verify(recomendacionService).pendientes(argThat(u -> u.getId().equals(22L)), eq("Transporte"));
+        verify(recomendacionService, never()).generar(any());
+    }
+
+    @Test void pendientesVaciosDevuelvenListaVacia() throws Exception {
+        String token = autenticar(true);
+        when(recomendacionService.pendientes(any(), isNull())).thenReturn(List.of());
+        mvc.perform(get("/usuarios/me/recomendaciones").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(content().json("[]"));
+    }
+
+    @Test void escenarioHipoteticoUsaJwtYNoGeneraNiPersiste() throws Exception {
+        String token = autenticar(true);
+        var item = new RecomendacionPersonalizadaDTO();
+        item.setImpactoEsperado("ESTIMACION_HIPOTETICA");
+        item.setImpactoPotencialKgCo2eSemanal(new java.math.BigDecimal("1.20"));
+        when(recomendacionService.pendientes(argThat(u -> u.getId().equals(22L)), isNull(),
+                eq(new EscenarioImpactoIADTO(new java.math.BigDecimal("10"), null, null))))
+                .thenReturn(List.of(item));
+        mvc.perform(get("/usuarios/me/recomendaciones").param("kmAutoEvitadosSemana", "10")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].impactoPotencialKgCo2eSemanal").value(1.20));
+        verify(recomendacionService, never()).generar(any());
+    }
+
+    @Test void pendientesRequierenJwt() throws Exception {
+        mvc.perform(get("/usuarios/me/recomendaciones")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(recomendacionService);
     }
 
     @Test

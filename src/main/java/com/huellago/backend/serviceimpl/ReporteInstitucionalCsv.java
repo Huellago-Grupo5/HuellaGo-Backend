@@ -17,7 +17,13 @@ public class ReporteInstitucionalCsv {
             "campanas_con_resultado", "campanas_exitosas", "campanas_no_alcanzadas", "campana_id",
             "campana_nombre", "objetivo", "fecha_inicio", "fecha_fin", "estado_campana", "estado_colectivo",
             "participaciones_registradas_campana", "participantes_seguimiento", "progreso_colectivo_porcentaje",
-            "resultado_final", "fecha_cierre", "advertencias");
+            "resultado_final", "fecha_cierre", "advertencias",
+            "miembros_institucion", "miembros_con_huella", "miembros_considerados_promedio",
+            "huella_promedio_kg_co2e_semanal", "unidad_huella", "periodo_huella",
+            "estado_huella", "limitaciones_huella", "miembros_con_dos_calculos",
+            "miembros_incluidos_variacion", "variacion_absoluta_kg_co2e_semanal",
+            "variacion_porcentual", "estado_variacion", "limitaciones_variacion",
+            "huella_inicial_kg_co2e_semanal", "huella_final_kg_co2e_semanal");
 
     public byte[] generar(ReporteInstitucionalDTO reporte) {
         StringBuilder csv = new StringBuilder("\uFEFF");
@@ -40,6 +46,17 @@ public class ReporteInstitucionalCsv {
                 c.estadoColectivo(), c.participacionesRegistradas(), c.participantes(), c.progresoColectivo(),
                 c.resultadoFinal(), c.fechaCierre()));
         fila.add(String.join(" | ", r.advertencias()));
+        var huella = r.huellaPromedio();
+        var impacto = r.seguimientoImpacto();
+        if (huella == null) fila.addAll(Collections.nCopies(8, null));
+        else fila.addAll(Arrays.asList(huella.miembrosInstitucion(), huella.miembrosConCalculo(),
+                huella.miembrosConsiderados(), huella.promedioKgCo2eSemanal(), huella.unidad(),
+                huella.periodo(), huella.estado(), huella.limitaciones()));
+        if (impacto == null) fila.addAll(Collections.nCopies(8, null));
+        else fila.addAll(Arrays.asList(impacto.miembrosConDosCalculosCompletos(),
+                impacto.miembrosIncluidos(), impacto.variacionAbsolutaKgCo2eSemanal(),
+                impacto.variacionPorcentual(), impacto.estado(), impacto.limitaciones(),
+                impacto.huellaInicialKgCo2eSemanal(), impacto.huellaFinalKgCo2eSemanal()));
         return fila;
     }
 

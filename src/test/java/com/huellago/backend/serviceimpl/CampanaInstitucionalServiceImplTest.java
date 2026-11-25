@@ -183,6 +183,24 @@ class CampanaInstitucionalServiceImplTest {
         verify(colectivos, never()).cerrarVencido(any());
     }
 
+    @Test void cierrePersistidoClasificaComoFinalizadaAunqueYaNoAdmitaParticipantes() {
+        Reto reto = campana();
+        reto.setFechaInicio(LocalDate.now().minusDays(3));
+        reto.setFechaFin(LocalDate.now().minusDays(1));
+        reto.setActivo(false);
+        when(retos.findByIdAndInstitucion_Id(50, 5L)).thenReturn(Optional.of(reto));
+        for (String resultado : List.of("EXITOSO", "NO_ALCANZADO")) {
+            var seguimiento = new RetoColectivoDTO(50, "Nombre", reto.getFechaInicio(), reto.getFechaFin(),
+                    2, new java.math.BigDecimal("100.00"), resultado, java.time.LocalDateTime.now());
+            when(colectivos.obtener(50, 77L)).thenReturn(seguimiento);
+            var respuesta = servicio.detalle(5L, 50, usuario);
+            assertEquals("FINALIZADA", respuesta.estado());
+            assertFalse(respuesta.publicada());
+            assertSame(seguimiento, respuesta.seguimiento());
+        }
+        verify(colectivos, never()).cerrarVencido(any());
+    }
+
     @Test
     void validaIdentidadIdentificadoresYPaginacion() {
         assertEquals(401, error(() -> servicio.crear(5L, null, datosValidos())));

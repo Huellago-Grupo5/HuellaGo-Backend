@@ -17,6 +17,9 @@ public class UsuarioInstitucion {
     private Institucion institucion;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 30)
     private RolInstitucional rol;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "grupo_id")
+    private GrupoInstitucional grupo;
     @Column(name = "fecha_afiliacion", nullable = false)
     private LocalDateTime fechaAfiliacion;
 
@@ -27,6 +30,8 @@ public class UsuarioInstitucion {
     public void setInstitucion(Institucion institucion) { this.institucion = institucion; }
     public RolInstitucional getRol() { return rol; }
     public void setRol(RolInstitucional rol) { this.rol = rol; }
+    public GrupoInstitucional getGrupo() { return grupo; }
+    public void setGrupo(GrupoInstitucional grupo) { this.grupo = grupo; }
     public LocalDateTime getFechaAfiliacion() { return fechaAfiliacion; }
     public void setFechaAfiliacion(LocalDateTime fechaAfiliacion) { this.fechaAfiliacion = fechaAfiliacion; }
 }

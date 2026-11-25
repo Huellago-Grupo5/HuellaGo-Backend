@@ -6,19 +6,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 
-/** No incorpora factores ni umbrales cientificos por defecto. */
+/** Umbrales orientativos internos de HuellaGo; no son límites científicos ni per cápita. */
 @Component
 public class PoliticaMedicionInicial {
     @Value("${huellago.medicion.electricidad.factor-kg-co2e-kwh:}")
     String factorElectricidad = "";
     @Value("${huellago.medicion.electricidad.referencia:}")
     String referenciaElectricidad = "";
-    @Value("${huellago.medicion.impacto.limite-bajo:}")
-    String limiteBajo = "";
-    @Value("${huellago.medicion.impacto.limite-medio:}")
-    String limiteMedio = "";
-    @Value("${huellago.medicion.impacto.referencia:}")
-    String referencia = "";
+    @Value("${huellago.medicion.impacto.limite-bajo:35}")
+    String limiteBajo = "35";
+    @Value("${huellago.medicion.impacto.limite-medio:70}")
+    String limiteMedio = "70";
+    @Value("${huellago.medicion.impacto.referencia:Convención académica HuellaGo: huella semanal orientativa de alcance mixto personal y del hogar; umbrales no oficiales ni per cápita}")
+    String referencia = "Convención académica HuellaGo: huella semanal orientativa de alcance mixto personal y del hogar; umbrales no oficiales ni per cápita";
 
     BigDecimal consumoElectricoSemanal(BigDecimal consumoDiario) {
         if (referenciaElectricidad.isBlank()) throw noDisponible("Falta una referencia documentada del factor eléctrico");
@@ -35,7 +35,7 @@ public class PoliticaMedicionInicial {
         BigDecimal bajo = numero(limiteBajo), medio = numero(limiteMedio);
         if (bajo.signum() < 0 || medio.compareTo(bajo) <= 0)
             throw noDisponible("Umbrales de impacto incompatibles");
-        return total.compareTo(bajo) <= 0 ? "BAJO" : total.compareTo(medio) <= 0 ? "MEDIO" : "ALTO";
+        return total.compareTo(bajo) < 0 ? "BAJO" : total.compareTo(medio) < 0 ? "MEDIO" : "ALTO";
     }
 
     String referenciaImpacto() {

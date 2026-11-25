@@ -5,14 +5,24 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class JwtCuentaTest {
+    private static final String SECRETO = java.util.Base64.getEncoder().encodeToString(new byte[32]);
+    private JwtUtilService jwt() {
+        var jwt = new JwtUtilService();
+        org.springframework.test.util.ReflectionTestUtils.setField(jwt, "secretoExterno", SECRETO);
+        return jwt;
+    }
     @Test void emisionesSimultaneasSonDistintasYValidasSoloConLaClaveCorrespondiente() {
-        var jwt=new JwtUtilService();var usuario=new Usuario();usuario.setId(22L);usuario.setCorreo("cuenta@example.invalid");var principal=new UserSecurity(usuario);
+        var jwt=jwt();var usuario=new Usuario();usuario.setId(22L);usuario.setCorreo("cuenta@example.invalid");var principal=new UserSecurity(usuario);
         String uno=jwt.generateToken(principal), dos=jwt.generateToken(principal);
         assertNotEquals(uno,dos);assertTrue(jwt.validateToken(uno,principal));assertTrue(jwt.validateToken(dos,principal));
-        assertThrows(RuntimeException.class,()->new JwtUtilService().validateToken(uno,principal));
+        var otraClave = new JwtUtilService();
+        byte[] bytes = new byte[32]; bytes[0] = 1;
+        org.springframework.test.util.ReflectionTestUtils.setField(otraClave,"secretoExterno",
+                java.util.Base64.getEncoder().encodeToString(bytes));
+        assertThrows(RuntimeException.class,()->otraClave.validateToken(uno,principal));
     }
     @Test void normalizaSubjectParaCuentasLegadasSinInvalidarCambioSoloDeMayusculas() {
-        var jwt=new JwtUtilService();var usuario=new Usuario();usuario.setId(22L);usuario.setCorreo("CUENTA@EXAMPLE.INVALID");var principal=new UserSecurity(usuario);
+        var jwt=jwt();var usuario=new Usuario();usuario.setId(22L);usuario.setCorreo("CUENTA@EXAMPLE.INVALID");var principal=new UserSecurity(usuario);
         String token=jwt.generateToken(principal);assertEquals("cuenta@example.invalid",jwt.extractUsername(token));
         usuario.setCorreo("cuenta@example.invalid");assertTrue(jwt.validateToken(token,principal));
     }
@@ -31,5 +41,8 @@ class JwtCuentaTest {
     @Test void secretoExternoDebilFallaDeFormaCerrada() {
         var jwt=new JwtUtilService();org.springframework.test.util.ReflectionTestUtils.setField(jwt,"secretoExterno","YQ==");
         assertThrows(io.jsonwebtoken.security.WeakKeyException.class,jwt::verificarConfiguracion);
+    }
+    @Test void arranqueSinSecretoFallaEnLugarDeGenerarClaveEfimera() {
+        assertThrows(IllegalStateException.class, new JwtUtilService()::verificarConfiguracion);
     }
 }

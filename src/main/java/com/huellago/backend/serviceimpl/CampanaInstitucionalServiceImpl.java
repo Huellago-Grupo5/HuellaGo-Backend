@@ -92,12 +92,16 @@ public class CampanaInstitucionalServiceImpl implements CampanaInstitucionalServ
     private CampanaRespuestaDTO respuesta(Reto reto, Long usuarioId) {
         LocalDate hoy = LocalDate.now();
         boolean publicada = Boolean.TRUE.equals(reto.getActivo());
+        RetoColectivoDTO seguimiento = colectivos.obtener(reto.getId(), usuarioId);
+        var cierre = seguimiento == null || seguimiento.getFechaCierre() == null ? null : new CalculoSeguimientoColectivo.Cierre(
+                seguimiento.getParticipantes(), seguimiento.getProgresoColectivo(),
+                seguimiento.getEstado(), seguimiento.getFechaCierre());
         String estado = CalculoSeguimientoColectivo.estadoCampana(new CalculoSeguimientoColectivo.Datos(
-                reto.getId(), reto.getTitulo(), reto.getFechaInicio(), reto.getFechaFin(), reto.getActivo()), hoy);
+                reto.getId(), reto.getTitulo(), reto.getFechaInicio(), reto.getFechaFin(), reto.getActivo()), cierre, hoy);
         return new CampanaRespuestaDTO(reto.getId(), reto.getInstitucion().getId(), reto.getTitulo(),
                 reto.getDescripcion(), reto.getFechaInicio(), reto.getFechaFin(),
                 ChronoUnit.DAYS.between(reto.getFechaInicio(), reto.getFechaFin()) + 1,
-                publicada, estado, colectivos.obtener(reto.getId(), usuarioId));
+                publicada, estado, seguimiento);
     }
 
     private void validarDatos(CampanaCrearDTO datos) {

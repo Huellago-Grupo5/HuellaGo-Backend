@@ -37,3 +37,6 @@ build/
 *.iml
 .env
 *.log
+.DS_Store
+/.m2/
+/tomcat.*/

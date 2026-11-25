@@ -25,6 +25,7 @@ class ReporteInstitucionalServiceImplTest {
     RetoRepository retos;
     UsuarioRetoRepository participaciones;
     ResultadoRetoColectivoRepository resultados;
+    HuellaCarbonoRepository huellas;
     ReporteInstitucionalServiceImpl servicio;
     Usuario usuario;
     LocalDate hoy = LocalDate.now();
@@ -35,6 +36,29 @@ class ReporteInstitucionalServiceImplTest {
     record Cierre(Integer getRetoId, Integer getParticipantes, BigDecimal getProgresoFinal,
             String getEstado, LocalDateTime getFechaCierre) implements ResultadoReporteVista { }
     record Totales(Long getTotal, Long getUsuarios) implements TotalesParticipacionVista { }
+    record HuellaFila(Long getUsuarioId, BigDecimal getCo2Total,
+            BigDecimal getCo2Transporte, BigDecimal getCo2Energia,
+            BigDecimal getCo2Alimentacion, BigDecimal getCo2Residuos,
+            LocalDateTime getFechaCalculo, String getMetodologiaVersion,
+            String getPeriodoCalculo, String getUnidadCalculo,
+            String getPerimetroCalculo, String getFactoresAplicados)
+            implements HuellaCarbonoRepository.FilaInstitucional {
+        HuellaFila(Long usuario, BigDecimal total, BigDecimal transporte, BigDecimal energia,
+                BigDecimal alimentacion, BigDecimal residuos, LocalDateTime fecha) {
+            this(usuario, total, transporte, energia, alimentacion, residuos, fecha,
+                    null, null, null, null, null);
+        }
+    }
+
+    HuellaFila huella(long usuarioId, String total, LocalDateTime fecha) {
+        return new HuellaFila(usuarioId, new BigDecimal(total), new BigDecimal("5"),
+                new BigDecimal("10"), new BigDecimal("3"), new BigDecimal("2"), fecha);
+    }
+    HuellaFila versionada(long usuarioId, String total, LocalDateTime fecha, String factores) {
+        return new HuellaFila(usuarioId, new BigDecimal(total), new BigDecimal("5"),
+                new BigDecimal("10"), new BigDecimal("3"), new BigDecimal("2"), fecha,
+                "HUELLAGO_SEMANAL_V1", "semanal", "kg CO2e", "PERSONAL_Y_HOGAR", factores);
+    }
 
     @BeforeEach void preparar() {
         instituciones = mock(InstitucionRepository.class);
@@ -42,8 +66,9 @@ class ReporteInstitucionalServiceImplTest {
         retos = mock(RetoRepository.class);
         participaciones = mock(UsuarioRetoRepository.class);
         resultados = mock(ResultadoRetoColectivoRepository.class);
+        huellas = mock(HuellaCarbonoRepository.class);
         servicio = new ReporteInstitucionalServiceImpl(instituciones, new AutorizacionInstitucionalService(afiliaciones),
-                retos, participaciones, resultados);
+                retos, participaciones, resultados, afiliaciones, huellas);
         usuario = new Usuario(); usuario.setId(77L); usuario.setEcoPuntos(30); usuario.setNivel(1);
         Institucion institucion = new Institucion();
         ReflectionTestUtils.setField(institucion, "id", 5L); institucion.setNombre("Universidad Perú");
@@ -72,6 +97,115 @@ class ReporteInstitucionalServiceImplTest {
         assertEquals(0, r.resumen().totalCampanas()); assertNull(r.resumen().progresoGeneralPonderado());
         assertEquals(1, r.advertencias().size());
         verifyNoInteractions(participaciones, resultados);
+    }
+    @Test void promedioUsaUltimaHuellaCompletaPorMiembroSinExponerDatosIndividuales() {
+        LocalDateTime ahora = LocalDateTime.of(2026, 11, 24, 10, 0);
+        when(afiliaciones.countByInstitucion_Id(5L)).thenReturn(4L);
+        when(huellas.historialInstitucional(5L)).thenReturn(List.of(
+                huella(22, "20.00", ahora), huella(22, "30.00", ahora.minusDays(7)),
+                huella(23, "40.00", ahora), huella(24, "30.00", ahora),
+                new HuellaFila(25L, null, null, null, null, null, ahora)));
+
+        var resultado = consultar();
+
+        assertEquals(4, resultado.huellaPromedio().miembrosInstitucion());
+        assertEquals(4, resultado.huellaPromedio().miembrosConCalculo());
+        assertEquals(3, resultado.huellaPromedio().miembrosConsiderados());
+        assertEquals(new BigDecimal("30.00"), resultado.huellaPromedio().promedioKgCo2eSemanal());
+        assertEquals("semanal", resultado.huellaPromedio().periodo());
+        assertEquals("ORIENTATIVO_NO_CERTIFICADO", resultado.huellaPromedio().estado());
+        assertEquals(1, resultado.seguimientoImpacto().miembrosConDosCalculosCompletos());
+        assertNull(resultado.seguimientoImpacto().variacionAbsolutaKgCo2eSemanal());
+        assertEquals("METODOLOGIA_NO_VERIFICABLE", resultado.seguimientoImpacto().estado());
+    }
+    @Test void noPublicaPromedioQueIdentifiqueUnaHuellaIndividual() {
+        when(afiliaciones.countByInstitucion_Id(5L)).thenReturn(1L);
+        when(huellas.historialInstitucional(5L)).thenReturn(List.of(
+                huella(22, "20.00", LocalDateTime.of(2026, 11, 24, 10, 0))));
+        var reporte = consultar();
+        assertEquals(1, reporte.huellaPromedio().miembrosConsiderados());
+        assertNull(reporte.huellaPromedio().promedioKgCo2eSemanal());
+        assertEquals("COHORTE_INSUFICIENTE", reporte.huellaPromedio().estado());
+    }
+    @Test void consultaHuellasLimitadaALaInstitucion() throws Exception {
+        String consulta = HuellaCarbonoRepository.class.getMethod("historialInstitucional", Long.class)
+                .getAnnotation(org.springframework.data.jpa.repository.Query.class).value();
+        assertTrue(consulta.contains("ui.institucion.id = :institucionId"));
+        assertTrue(consulta.contains("ui.usuario.id = h.usuario.id"));
+        assertFalse(consulta.contains("correo"));
+    }
+    @Test void variacionComparaLosMismosTresMiembrosConMetodoYFactoresIguales() {
+        LocalDateTime primero = LocalDateTime.of(2026, 11, 1, 10, 0);
+        LocalDateTime ultimo = primero.plusDays(14);
+        when(huellas.historialInstitucional(5L)).thenReturn(List.of(
+                versionada(22, "20", ultimo, "factores-v1"), versionada(22, "30", primero, "factores-v1"),
+                versionada(23, "25", ultimo, "factores-v1"), versionada(23, "20", primero, "factores-v1"),
+                versionada(24, "5", ultimo, "factores-v1"), versionada(24, "10", primero, "factores-v1")));
+        var resultado = consultar().seguimientoImpacto();
+        assertEquals(3, resultado.miembrosIncluidos());
+        assertEquals(new BigDecimal("60"), resultado.huellaInicialKgCo2eSemanal());
+        assertEquals(new BigDecimal("50"), resultado.huellaFinalKgCo2eSemanal());
+        assertEquals(new BigDecimal("-10"), resultado.variacionAbsolutaKgCo2eSemanal());
+        assertEquals(new BigDecimal("-16.67"), resultado.variacionPorcentual());
+        assertEquals("REDUCCION_ORIENTATIVA", resultado.estado());
+    }
+
+    @Test void noMezclaFactoresNiMuestraUnParIndividual() {
+        LocalDateTime antes = LocalDateTime.of(2026, 11, 1, 10, 0);
+        LocalDateTime despues = antes.plusDays(7);
+        when(huellas.historialInstitucional(5L)).thenReturn(List.of(
+                versionada(22, "10", despues, "factores-v2"),
+                versionada(22, "20", antes, "factores-v1"),
+                versionada(23, "10", despues, "factores-v1"),
+                versionada(23, "20", antes, "factores-v1")));
+        var resultado = consultar().seguimientoImpacto();
+        assertNull(resultado.variacionAbsolutaKgCo2eSemanal());
+        assertEquals(0, resultado.miembrosIncluidos());
+        assertEquals("COHORTE_INSUFICIENTE", resultado.estado());
+    }
+
+    @Test void baseInicialCeroNoInventaPorcentajeYAumentoConservaSigno() {
+        LocalDateTime antes = LocalDateTime.of(2026, 11, 1, 10, 0);
+        LocalDateTime despues = antes.plusDays(7);
+        var filas = new ArrayList<HuellaCarbonoRepository.FilaInstitucional>();
+        for (long id : List.of(22L, 23L, 24L)) {
+            filas.add(versionada(id, "5", despues, "factores-v1"));
+            filas.add(versionada(id, "0", antes, "factores-v1"));
+        }
+        when(huellas.historialInstitucional(5L)).thenReturn(filas);
+        var resultado = consultar().seguimientoImpacto();
+        assertEquals(new BigDecimal("15"), resultado.variacionAbsolutaKgCo2eSemanal());
+        assertNull(resultado.variacionPorcentual());
+        assertEquals("BASE_INICIAL_CERO", resultado.estado());
+    }
+    @Test void intervaloEsInclusivoYNoUsaCalculosFueraDeEl() {
+        LocalDateTime fuera = LocalDateTime.of(2026, 10, 31, 23, 59);
+        LocalDateTime inicial = LocalDateTime.of(2026, 11, 1, 10, 0);
+        LocalDateTime finalizada = LocalDateTime.of(2026, 11, 15, 10, 0);
+        var filas = new ArrayList<HuellaCarbonoRepository.FilaInstitucional>();
+        for (long id : List.of(22L, 23L, 24L)) {
+            filas.add(versionada(id, "10", finalizada, "factores-v1"));
+            filas.add(versionada(id, "20", inicial, "factores-v1"));
+            filas.add(versionada(id, "100", fuera, "factores-v1"));
+        }
+        when(huellas.historialInstitucional(5L)).thenReturn(filas);
+        var seguimiento = servicio.consultar(5L, usuario,
+                LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 15), null).seguimientoImpacto();
+        assertEquals(new BigDecimal("60"), seguimiento.huellaInicialKgCo2eSemanal());
+        assertEquals(new BigDecimal("30"), seguimiento.huellaFinalKgCo2eSemanal());
+    }
+    @Test void aumentoConBasePositivaConservaSignoYPorcentaje() {
+        LocalDateTime inicio = LocalDateTime.of(2026, 11, 1, 10, 0);
+        var filas = new ArrayList<HuellaCarbonoRepository.FilaInstitucional>();
+        for (long id : List.of(22L, 23L, 24L)) {
+            filas.add(versionada(id, "15", inicio.plusDays(7), "factores-v1"));
+            filas.add(versionada(id, "10", inicio, "factores-v1"));
+        }
+        when(huellas.historialInstitucional(5L)).thenReturn(filas);
+        var seguimiento = consultar().seguimientoImpacto();
+        assertEquals(new BigDecimal("15"), seguimiento.variacionAbsolutaKgCo2eSemanal());
+        assertEquals(new BigDecimal("50.00"), seguimiento.variacionPorcentual());
+        assertEquals("AUMENTO_ORIENTATIVO", seguimiento.estado());
     }
     @Test void activaUsaPromedioHu29YTotalesDistinguenPersonasDeParticipaciones() {
         campanas(campana(10, hoy.minusDays(1), hoy.plusDays(1)), campana(11, hoy, hoy.plusDays(3)));
@@ -104,6 +238,24 @@ class ReporteInstitucionalServiceImplTest {
         assertEquals(new BigDecimal("75.00"), c.progresoColectivo()); assertEquals(fecha, c.fechaCierre());
         assertEquals("NO_ALCANZADO", c.resultadoFinal()); assertEquals(1, r.resumen().finalizadas());
         assertEquals(1, r.resumen().conResultado()); assertEquals(1, r.resumen().noAlcanzadas());
+    }
+    @Test void cierreExitosoNoDisponibleSeCuentaYExportaComoFinalizado() {
+        var original = campana(48, hoy.minusDays(5), hoy.minusDays(1));
+        campanas(new Campana(original.getId(), original.getTitulo(), original.getDescripcion(),
+                original.getFechaInicio(), original.getFechaFin(), false));
+        var fechaCierre = hoy.minusDays(1).atTime(12, 0);
+        when(resultados.buscarParaReporte(any())).thenReturn(List.of(
+                new Cierre(48, 3, new BigDecimal("100.00"), "EXITOSO", fechaCierre)));
+        var reporte = consultar();
+        assertEquals("FINALIZADA", reporte.campanas().getFirst().estado());
+        assertEquals("EXITOSO", reporte.campanas().getFirst().estadoColectivo());
+        assertEquals(fechaCierre, reporte.campanas().getFirst().fechaCierre());
+        assertEquals(1, reporte.resumen().finalizadas());
+        assertEquals(0, reporte.resumen().noDisponibles());
+        assertEquals(1, reporte.resumen().exitosas());
+        String csv = new String(new ReporteInstitucionalCsv().generar(reporte), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(csv.contains("\"FINALIZADA\",\"EXITOSO\""));
+        assertTrue(csv.contains("\"1\",\"0\","));
     }
     @Test void exitosasProvienenDeResultadosRegistradosNoDeProgresoActual() {
         campanas(campana(10, hoy.minusDays(2), hoy.minusDays(1)));
@@ -180,11 +332,13 @@ class ReporteInstitucionalServiceImplTest {
         assertEquals(30, usuario.getEcoPuntos()); assertEquals(1, usuario.getNivel());
         verify(instituciones).findById(5L);
         verify(afiliaciones).existsByUsuario_IdAndInstitucion_IdAndRol(77L, 5L, RolInstitucional.ADMIN_INSTITUCIONAL);
+        verify(afiliaciones).countByInstitucion_Id(5L);
+        verify(huellas).historialInstitucional(5L);
         verify(retos).buscarParaReporte(eq(5L), isNull(), isNull(), isNull(), any());
         verify(participaciones).resumirParaReporte(List.of(10));
         verify(participaciones).totalesParaReporte(5L, null, null, null);
         verify(resultados).buscarParaReporte(List.of(10));
-        verifyNoMoreInteractions(instituciones, afiliaciones, retos, participaciones, resultados);
+        verifyNoMoreInteractions(instituciones, afiliaciones, retos, participaciones, resultados, huellas);
     }
     @Test void falloDeLecturaNoDevuelveReporteParcialNiEscribe() {
         campanas(campana(10, hoy, hoy));

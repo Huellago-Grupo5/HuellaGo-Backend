@@ -4,9 +4,13 @@ import com.huellago.backend.dtos.GeneracionRecomendacionesDTO;
 import com.huellago.backend.dtos.ConversionRecomendacionDTO;
 import com.huellago.backend.dtos.RecomendacionPersonalizadaDTO;
 import com.huellago.backend.dtos.RecomendacionCompletadaDTO;
+import com.huellago.backend.dtos.EscenarioImpactoIADTO;
 import com.huellago.backend.entities.*;
 import com.huellago.backend.repositories.*;
 import com.huellago.backend.services.RecomendacionService;
+import com.huellago.backend.services.NotificacionService;
+import com.huellago.backend.services.ContextoRecomendacionesIAService;
+import com.huellago.backend.services.CatalogoAccionesAmbientalesService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -38,6 +42,14 @@ public class RecomendacionServiceImpl implements RecomendacionService {
     RetoRepository retoRepository;
     @Autowired
     UsuarioRetoRepository usuarioRetoRepository;
+    @Autowired
+    NotificacionService notificacionService;
+    @Autowired
+    ContextoRecomendacionesIAService contextoRecomendacionesIAService;
+    @Autowired
+    CatalogoAccionesAmbientalesService catalogoAccionesAmbientalesService;
+    @Autowired
+    PoliticaMedicionInicial politicaMedicionInicial;
 
     @Override
     @Transactional
@@ -47,6 +59,8 @@ public class RecomendacionServiceImpl implements RecomendacionService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "El identificador de la recomendación debe ser positivo");
         }
+        usuarioRepository.bloquearParaRecomendaciones(usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
         usuarioRecomendacionIARepository.bloquearPropia(asociacionId, usuarioId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Recomendación no encontrada para el usuario"));
@@ -63,6 +77,8 @@ public class RecomendacionServiceImpl implements RecomendacionService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "El estado de la recomendación no permite completarla");
         }
+        // Comprobar antes de mutar o guardar: una instantánea parcial no es contenido heredado.
+        contenidoAsociado(asociacion);
         asociacion.setEstado("completado");
         asociacion.setFechaCompletado(LocalDateTime.now());
         return completadaDTO(usuarioRecomendacionIARepository.saveAndFlush(asociacion));
@@ -77,6 +93,94 @@ public class RecomendacionServiceImpl implements RecomendacionService {
                 .stream().map(this::completadaDTO).toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<RecomendacionPersonalizadaDTO> pendientes(Usuario autenticado, String categoria) {
+        return pendientes(autenticado, categoria, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RecomendacionPersonalizadaDTO> pendientes(Usuario autenticado, String categoria,
+            EscenarioImpactoIADTO escenario) {
+        Long usuarioId = identidad(autenticado);
+        String filtro = categoria == null ? null : normalizar(categoria);
+        if (filtro != null && !Set.of("transporte", "energia", "alimentacion", "residuos").contains(filtro))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Categoría ambiental no válida");
+        var contexto = escenario == null || !escenario.presente() ? null
+                : contextoRecomendacionesIAService.construir(usuarioId).contexto();
+        if (contexto != null) ImpactoHipoteticoIA.validar(escenario, contexto);
+        Set<String> compatibles = contexto == null ? Set.of()
+                : catalogoAccionesAmbientalesService.compatibles(contexto, Set.of()).stream()
+                    .map(c -> c.definicion().id() + "/" + c.definicion().version())
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        return usuarioRecomendacionIARepository
+                .findByUsuario_IdAndEstadoIgnoreCaseOrderByFechaCompletadoDescIdDesc(usuarioId, "pendiente")
+                .stream()
+                .filter(a -> a != null && "pendiente".equalsIgnoreCase(a.getEstado())
+                        && a.getUsuario() != null && usuarioId.equals(a.getUsuario().getId()))
+                .filter(a -> filtro == null || a.getRecomendacionIA() != null
+                        && a.getRecomendacionIA().getCategoria() != null
+                        && filtro.equals(normalizar(a.getRecomendacionIA().getCategoria().getNombre())))
+                .map(a -> {
+                    var dto = pendienteDTO(a);
+                    var canonica = a.getRecomendacionIA();
+                    if (contexto != null && canonica != null && canonica.getAccionId() != null
+                            && compatibles.contains(canonica.getAccionId() + "/" + canonica.getVersionAccion())
+                            && "OLLAMA_SELECCION_PRESENTACION_CONTROLADA".equals(a.getMetodoGeneracion()))
+                        ImpactoHipoteticoIA.aplicar(dto, canonica.getAccionId(), escenario, politicaMedicionInicial);
+                    return dto;
+                })
+                // La prioridad cualitativa prevalece; la cifra hipotética solo desempata en la misma categoría.
+                .sorted(Comparator.comparingInt((RecomendacionPersonalizadaDTO d) -> ordenPrioridad(d.getPrioridad()))
+                        .thenComparingInt(d -> ordenCategoria(d.getCategoria()))
+                        .thenComparing(RecomendacionPersonalizadaDTO::getImpactoPotencialKgCo2eSemanal,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(RecomendacionPersonalizadaDTO::getFechaGeneracion,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(RecomendacionPersonalizadaDTO::getUsuarioRecomendacionId,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+    }
+
+    private RecomendacionPersonalizadaDTO pendienteDTO(UsuarioRecomendacionIA asociacion) {
+        RecomendacionIA recomendacion = asociacion.getRecomendacionIA();
+        if (recomendacion == null || recomendacion.getCategoria() == null)
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "No se pudo recuperar la categoría de la recomendación");
+        ContenidoAsociado contenido = contenidoAsociado(asociacion);
+        String prioridad = asociacion.getPrioridadInstantanea() != null
+                ? asociacion.getPrioridadInstantanea() : recomendacion.getPrioridad();
+        var dto = new RecomendacionPersonalizadaDTO(asociacion.getId(), recomendacion.getId(),
+                recomendacion.getCategoria().getNombre(), contenido.titulo(), contenido.descripcion(),
+                asociacion.getMotivoInstantanea(), prioridad, null, asociacion.getEstado(),
+                asociacion.getFechaGeneracion());
+        if (recomendacion.getAccionId() != null && recomendacion.getVersionAccion() != null
+                && "OLLAMA_SELECCION_PRESENTACION_CONTROLADA".equals(asociacion.getMetodoGeneracion())) {
+            dto.setAccionId(recomendacion.getAccionId());
+            dto.setVersionAccion(recomendacion.getVersionAccion());
+            dto.indicarImpactoNoEstimable();
+            if (PrioridadAccionAmbientalIA.BASE.equals(asociacion.getBasePriorizacion()))
+                dto.setJustificacionPrioridad(PrioridadAccionAmbientalIA.evaluar(
+                        recomendacion.getAccionId(), recomendacion.getVersionAccion()).justificacion());
+        }
+        return dto;
+    }
+
+    private int ordenPrioridad(String prioridad) {
+        if (prioridad == null) return 3;
+        return switch (prioridad.toUpperCase(Locale.ROOT)) {
+            case "ALTA" -> 0; case "MEDIA" -> 1; case "BAJA" -> 2; default -> 3;
+        };
+    }
+
+    private int ordenCategoria(String categoria) {
+        return switch (normalizar(categoria)) {
+            case "transporte" -> 0; case "energia" -> 1; case "alimentacion" -> 2;
+            case "residuos" -> 3; default -> 4;
+        };
+    }
+
     private Long identidad(Usuario autenticado) {
         if (autenticado == null || autenticado.getId() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Se requiere autenticación");
@@ -86,11 +190,39 @@ public class RecomendacionServiceImpl implements RecomendacionService {
 
     private RecomendacionCompletadaDTO completadaDTO(UsuarioRecomendacionIA asociacion) {
         RecomendacionIA recomendacion = asociacion.getRecomendacionIA();
+        ContenidoAsociado contenido = contenidoAsociado(asociacion);
         return new RecomendacionCompletadaDTO(asociacion.getId(),
                 recomendacion == null ? null : recomendacion.getId(),
-                recomendacion == null ? null : recomendacion.getTitulo(),
-                recomendacion == null ? null : recomendacion.getDescripcion(),
+                contenido.titulo(), contenido.descripcion(),
                 asociacion.getEstado(), asociacion.getFechaGeneracion(), asociacion.getFechaCompletado());
+    }
+
+    private record ContenidoAsociado(String titulo, String descripcion) { }
+
+    private ContenidoAsociado contenidoAsociado(UsuarioRecomendacionIA asociacion) {
+        RecomendacionIA compartida = asociacion.getRecomendacionIA();
+        // Cualquier metadato nuevo, incluso vacío, impide degradar silenciosamente a legado.
+        boolean personalizada = compartida != null
+                && (compartida.getAccionId() != null || compartida.getVersionAccion() != null);
+        personalizada = personalizada || metadatosInstantanea(asociacion).anyMatch(Objects::nonNull);
+        if (!personalizada) return new ContenidoAsociado(
+                compartida == null ? null : compartida.getTitulo(),
+                compartida == null ? null : compartida.getDescripcion());
+        if (asociacion.getTituloInstantanea() == null || asociacion.getTituloInstantanea().isBlank()
+                || asociacion.getDescripcionInstantanea() == null || asociacion.getDescripcionInstantanea().isBlank()
+                || asociacion.getMotivoInstantanea() == null || asociacion.getMotivoInstantanea().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "No se pudo recuperar el contenido personalizado de la recomendación");
+        }
+        // Conservar los textos exactos, sin trim, reconstrucción ni modificación de la entidad.
+        return new ContenidoAsociado(asociacion.getTituloInstantanea(), asociacion.getDescripcionInstantanea());
+    }
+
+    private java.util.stream.Stream<Object> metadatosInstantanea(UsuarioRecomendacionIA a) {
+        return java.util.stream.Stream.of(a.getTituloInstantanea(), a.getDescripcionInstantanea(),
+                a.getMotivoInstantanea(), a.getEnfoque(), a.getVersionPresentacion(), a.getMetodoGeneracion(),
+                a.getReferenciaContexto(), a.getPrioridadInstantanea(), a.getBasePriorizacion(),
+                a.getHuellaOrigenId(), a.getModeloGeneracion());
     }
 
     @Override
@@ -110,6 +242,7 @@ public class RecomendacionServiceImpl implements RecomendacionService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "La recomendación ya fue convertida en reto");
         }
+        ContenidoAsociado contenido = contenidoAsociado(asociacion);
         RecomendacionIA recomendacion = asociacion.getRecomendacionIA();
         if (recomendacion == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -117,8 +250,8 @@ public class RecomendacionServiceImpl implements RecomendacionService {
         }
 
         Reto reto = new Reto();
-        reto.setTitulo(recomendacion.getTitulo());
-        reto.setDescripcion(recomendacion.getDescripcion());
+        reto.setTitulo(contenido.titulo());
+        reto.setDescripcion(contenido.descripcion());
         reto.setCategoria(recomendacion.getCategoria());
         reto.setPuntosRecompensa(0);
         reto.setFechaInicio(LocalDate.now());
@@ -223,16 +356,20 @@ public class RecomendacionServiceImpl implements RecomendacionService {
                     && emision.compareTo(mayorEmision) == 0;
             Accion accion = mayorImpacto ? enfocarMayorImpacto(original) : original;
             RecomendacionIA recomendacion = obtenerCatalogo(accion);
-            UsuarioRecomendacionIA asociacion = usuarioRecomendacionIARepository
-                    .findFirstByUsuario_IdAndRecomendacionIA_IdOrderByIdAsc(
-                            usuarioId, recomendacion.getId())
-                    .orElseGet(() -> asociar(usuario, recomendacion));
+            var existente = usuarioRecomendacionIARepository
+                    .findFirstByUsuario_IdAndRecomendacionIA_IdOrderByIdAsc(usuarioId, recomendacion.getId());
+            String prioridad = mayorImpacto ? "ALTA" : "MEDIA";
+            UsuarioRecomendacionIA asociacion = existente.orElseGet(() -> asociar(usuario, recomendacion,
+                    prioridad, usarHuella ? "HUELLA_REGISTRADA" : "HABITOS_REGISTRADOS"));
             if (asociacion.getFechaCompletado() != null
                     || "completado".equalsIgnoreCase(asociacion.getEstado())
                     || origenesRealizados.contains(asociacion.getId())) {
                 continue;
             }
-            String prioridad = mayorImpacto ? "ALTA" : "MEDIA";
+            if (existente.isEmpty() && "ALTA".equals(prioridad))
+                notificacionService.crearPorEvento(usuario, "RECOMENDACION_ALTA:"+asociacion.getId(),
+                        "Nueva recomendación prioritaria", "Tienes una nueva recomendación prioritaria de "
+                                + accion.categoria().nombre+".", "RECOMENDACION_ALTA");
             recomendaciones.add(new RecomendacionPersonalizadaDTO(
                     asociacion.getId(), recomendacion.getId(), accion.categoria().nombre,
                     recomendacion.getTitulo(), recomendacion.getDescripcion(), accion.motivo(),
@@ -291,7 +428,9 @@ public class RecomendacionServiceImpl implements RecomendacionService {
             for (Categoria categoria : Categoria.values()) {
                 if (normalizar(categoria.nombre).equals(normalizar(habito.getCategoria().getNombre()))) {
                     String campo = normalizar(habito.getNombre());
-                    if (categoria.campos.contains(campo)) {
+                    // El consumo opcional participa en la vigencia, no en los campos obligatorios.
+                    if (categoria.campos.contains(campo)
+                            || (categoria == Categoria.ENERGIA && "consumokwhdiario".equals(campo))) {
                         datos.get(categoria).merge(campo, habito,
                                 (anterior, actual) -> orden.compare(actual, anterior) > 0 ? actual : anterior);
                     }
@@ -473,12 +612,15 @@ public class RecomendacionServiceImpl implements RecomendacionService {
                 });
     }
 
-    private UsuarioRecomendacionIA asociar(Usuario usuario, RecomendacionIA recomendacion) {
+    private UsuarioRecomendacionIA asociar(Usuario usuario, RecomendacionIA recomendacion,
+            String prioridad, String basePriorizacion) {
         UsuarioRecomendacionIA nueva = new UsuarioRecomendacionIA();
         nueva.setUsuario(usuario);
         nueva.setRecomendacionIA(recomendacion);
         nueva.setEstado("Pendiente");
         nueva.setFechaGeneracion(LocalDateTime.now());
+        nueva.setPrioridadInstantanea(prioridad);
+        nueva.setBasePriorizacion(basePriorizacion);
         return usuarioRecomendacionIARepository.save(nueva);
     }
 

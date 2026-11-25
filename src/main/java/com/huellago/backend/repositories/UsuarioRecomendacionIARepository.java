@@ -9,6 +9,12 @@ import org.springframework.data.repository.query.Param;
 
 public interface UsuarioRecomendacionIARepository extends JpaRepository<UsuarioRecomendacionIA, Integer> {
 
+    List<UsuarioRecomendacionIA> findByUsuario_IdAndReferenciaContextoAndMetodoGeneracion(
+            Long usuarioId, String referenciaContexto, String metodoGeneracion);
+
+    List<UsuarioRecomendacionIA> findByUsuario_IdAndEstadoIgnoreCaseAndRecomendacionIA_Categoria_Id(
+            Long usuarioId, String estado, Long categoriaId);
+
     @Query(value = "SELECT id FROM usuarios_recomendaciones_ia WHERE id = :id AND usuario_id = :usuarioId FOR UPDATE", nativeQuery = true)
     Optional<Integer> bloquearPropia(@Param("id") Integer id, @Param("usuarioId") Long usuarioId);
 

@@ -2,6 +2,7 @@ package com.huellago.backend.serviceimpl;
 
 import com.huellago.backend.entities.*;
 import com.huellago.backend.repositories.*;
+import com.huellago.backend.services.NotificacionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +29,7 @@ class RecomendacionServiceImplTest {
     @Mock RecomendacionIARepository recomendacionIARepository;
     @Mock UsuarioRecomendacionIARepository usuarioRecomendacionIARepository;
     @Mock UsuarioRetoRepository usuarioRetoRepository;
+    @Mock NotificacionService notificacionService;
     @InjectMocks RecomendacionServiceImpl service;
 
     private final Map<Long, Usuario> usuarios = new HashMap<>();
@@ -102,6 +104,13 @@ class RecomendacionServiceImplTest {
         assertEquals(4, catalogo.size());
         assertTrue(asociaciones.values().stream().allMatch(a -> a.getUsuario().getId().equals(22L)));
         assertTrue(catalogo.values().stream().allMatch(r -> r.getPuntosRecompensa() == 0));
+        assertEquals("ALTA", asociaciones.get("22:1").getPrioridadInstantanea());
+        assertEquals("HUELLA_REGISTRADA", asociaciones.get("22:1").getBasePriorizacion());
+        verify(notificacionService, times(1)).crearPorEvento(eq(usuarios.get(22L)),
+                startsWith("RECOMENDACION_ALTA:"), anyString(), anyString(), eq("RECOMENDACION_ALTA"));
+        service.generar(usuarios.get(22L));
+        verify(notificacionService, times(1)).crearPorEvento(eq(usuarios.get(22L)),
+                startsWith("RECOMENDACION_ALTA:"), anyString(), anyString(), eq("RECOMENDACION_ALTA"));
         verify(huellaCarbonoRepository, never()).save(any());
         verify(habitoRepository, never()).save(any());
     }
@@ -355,6 +364,104 @@ class RecomendacionServiceImplTest {
         assertEquals(4, asociaciones.size());
         assertTrue(asociaciones.values().stream().allMatch(a ->
                 fechaHabitos.plusDays(1).equals(a.getFechaCompletado())));
+    }
+
+    @Test
+    void consumoOpcionalAusenteNoImpideUsarHuellaVigente() {
+        habitosCompletos(22L, "Auto", "Electricidad", "Mixta", "Alto", false);
+        huella(22L, "12", "1.8", "2", "1.8");
+
+        var resultado = service.generar(usuarios.get(22L));
+
+        assertEquals("HUELLA_REGISTRADA", resultado.getBasePriorizacion());
+        assertTrue(resultado.getDatosFaltantes().isEmpty());
+        assertEquals(4, resultado.getRecomendaciones().size());
+    }
+
+    @Test
+    void consumoRegistradoAnteriorOIgualAlCalculoMantieneHuellaVigente() {
+        habitosCompletos(22L, "Auto", "Electricidad", "Mixta", "Alto", false);
+        Habito consumo = habito(22L, 10L, "Energía", "consumoKwhDiario", "4", "kWh/dia");
+        habitos.get(22L).add(consumo);
+        var calculada = huella(22L, "12", "1.8", "2", "1.8");
+
+        assertEquals("HUELLA_REGISTRADA", service.generar(usuarios.get(22L)).getBasePriorizacion());
+        consumo.setFechaActualizacion(calculada.getFechaCalculo());
+        assertEquals("HUELLA_REGISTRADA", service.generar(usuarios.get(22L)).getBasePriorizacion());
+    }
+
+    @Test
+    void cambioExclusivoDeConsumoInvalidaHuellaYRecalculoRestableceVigenciaSinAlterarHistorial() {
+        habitosCompletos(22L, "Auto", "Electricidad", "Mixta", "Alto", false);
+        Habito consumo = habito(22L, 10L, "Energia", "consumoKwhDiario", "4", "kWh/dia");
+        habitos.get(22L).add(consumo);
+        HuellaCarbono anterior = huella(22L, "12", "1.8", "2", "1.8");
+        var inicial = service.generar(usuarios.get(22L));
+        var conservadas = new ArrayList<>(asociaciones.values());
+        var fechas = conservadas.stream().map(UsuarioRecomendacionIA::getFechaGeneracion).toList();
+        var completada = conservadas.stream()
+                .filter(a -> "Alimentacion".equals(a.getRecomendacionIA().getCategoria().getNombre()))
+                .findFirst().orElseThrow();
+        completada.setEstado("Completado");
+        completada.setFechaCompletado(fechaHabitos.plusHours(1));
+
+        consumo.setValor(new BigDecimal("5"));
+        consumo.setFechaActualizacion(fechaHabitos.plusDays(2));
+        var desactualizada = service.generar(usuarios.get(22L));
+
+        assertEquals("HUELLA_REGISTRADA", inicial.getBasePriorizacion());
+        assertEquals("HABITOS_REGISTRADOS", desactualizada.getBasePriorizacion());
+        assertNull(desactualizada.getHuellaId());
+        assertFalse(desactualizada.getAdvertencias().isEmpty());
+        assertTrue(desactualizada.getDatosFaltantes().isEmpty());
+        assertTrue(desactualizada.getRecomendaciones().stream().allMatch(r -> r.getCo2Categoria() == null));
+        assertSame(anterior, huellas.get(22L));
+        assertEquals(new BigDecimal("1.8"), anterior.getCo2Energia());
+
+        // Simula la nueva huella persistida por el recálculo; no ejecuta ni cambia sus fórmulas.
+        HuellaCarbono recalculada = huella(22L, "12", "2.8", "2", "1.8");
+        recalculada.setId(2L);
+        recalculada.setFechaCalculo(fechaHabitos.plusDays(3));
+        var actualizada = service.generar(usuarios.get(22L));
+
+        assertEquals("HUELLA_REGISTRADA", actualizada.getBasePriorizacion());
+        assertEquals(2L, actualizada.getHuellaId());
+        assertTrue(actualizada.getAdvertencias().isEmpty());
+        assertEquals(new BigDecimal("2.8"), actualizada.getRecomendaciones().stream()
+                .filter(r -> "Energía".equals(r.getCategoria())).findFirst().orElseThrow().getCo2Categoria());
+        assertEquals(inicial.getRecomendaciones().stream()
+                        .filter(r -> !r.getUsuarioRecomendacionId().equals(completada.getId()))
+                        .map(r -> r.getUsuarioRecomendacionId()).toList(),
+                actualizada.getRecomendaciones().stream().map(r -> r.getUsuarioRecomendacionId()).toList());
+        for (int i = 0; i < conservadas.size(); i++) {
+            var guardada = conservadas.get(i);
+            assertSame(guardada, asociaciones.get("22:" + guardada.getRecomendacionIA().getId()));
+            assertEquals(fechas.get(i), guardada.getFechaGeneracion());
+        }
+        assertEquals("Completado", completada.getEstado());
+        assertEquals(fechaHabitos.plusHours(1), completada.getFechaCompletado());
+        assertTrue(actualizada.getRecomendaciones().stream()
+                .noneMatch(r -> r.getUsuarioRecomendacionId().equals(completada.getId())));
+        assertEquals(new BigDecimal("5"), consumo.getValor());
+        verify(habitoRepository, never()).save(any());
+        verify(huellaCarbonoRepository, never()).save(any());
+        verify(usuarioRecomendacionIARepository, never()).delete(any());
+    }
+
+    @Test
+    void consumoSinFechaConfiableImpidePriorizarPorHuella() {
+        habitosCompletos(22L, "Auto", "Electricidad", "Mixta", "Alto", false);
+        Habito consumo = habito(22L, 10L, "Energia", "consumoKwhDiario", "4", "kWh/dia");
+        consumo.setFechaRegistro(null);
+        consumo.setFechaActualizacion(null);
+        habitos.get(22L).add(consumo);
+        huella(22L, "12", "1.8", "2", "1.8");
+
+        var resultado = service.generar(usuarios.get(22L));
+
+        assertEquals("HABITOS_REGISTRADOS", resultado.getBasePriorizacion());
+        assertTrue(resultado.getDatosFaltantes().isEmpty());
+        assertNull(resultado.getHuellaId());
     }
 
     private void habitosCompletos(Long usuarioId, String medio, String fuente,

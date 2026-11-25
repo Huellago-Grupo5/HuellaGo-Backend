@@ -13,7 +13,9 @@ public interface HuellaCarbonoService {
     public HuellaCarbonoRespuestaDTO buscarPorUsuario(Long usuarioId);
     public HuellaDesgloseDTO obtenerDesglose(Long usuarioId);
     public List<HuellaCarbonoRespuestaDTO> obtenerHistorial(Long usuarioId);
+    public List<HuellaCarbonoRespuestaDTO> obtenerHistorial(Long usuarioId, java.time.LocalDate fecha);
     public HuellaEquivalenciasDTO obtenerEquivalencias(Long usuarioId);
     public HuellaCarbonoRespuestaDTO obtenerHuellaDiaria(Long usuarioId);
+    public HuellaCarbonoRespuestaDTO obtenerHuellaDiaria(Long usuarioId, java.time.LocalDate fecha);
     public ComparacionPromedioDTO compararConPromedio(Long usuarioId);
 }

@@ -4,6 +4,8 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
 import javax.crypto.SecretKey;
 import java.util.Base64;
@@ -14,19 +16,28 @@ import java.util.function.Function;
 
 @Service
 public class JwtUtilService {
-    @org.springframework.beans.factory.annotation.Value("${huellago.jwt.secret:}")
     private String secretoExterno = "";
-    private final SecretKey claveEfimera = Jwts.SIG.HS256.key().build();
     private static final Long JWT_TOKEN_VALIDITY = 1000 * 60 * 60 * 3L;
+
+    @Autowired
+    public JwtUtilService(@Value("${huellago.jwt.secret:}") String secretoExterno) {
+        this.secretoExterno = secretoExterno;
+    }
+
+    public JwtUtilService() { }
 
     @jakarta.annotation.PostConstruct
     void verificarConfiguracion() {
+        if (secretoExterno == null || secretoExterno.isBlank()) {
+            throw new IllegalStateException("HUELLAGO_JWT_SECRET debe contener una clave Base64 estable de al menos 256 bits");
+        }
         getSigningKey();
     }
 
     private SecretKey getSigningKey() {
-        // Sin secreto externo se usa una clave aleatoria efímera: reiniciar invalida tokens.
-        if (secretoExterno.isBlank()) return claveEfimera;
+        if (secretoExterno == null || secretoExterno.isBlank()) {
+            throw new IllegalStateException("HUELLAGO_JWT_SECRET no configurado");
+        }
         return Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretoExterno));
     }
 

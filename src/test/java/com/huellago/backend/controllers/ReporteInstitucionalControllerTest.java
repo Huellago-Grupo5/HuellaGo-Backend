@@ -32,6 +32,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ReporteInstitucionalController.class)
+@org.springframework.test.context.TestPropertySource(properties="huellago.jwt.secret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 @Import({SecurityConfiguration.class, JwtRequestFilter.class, JwtUtilService.class, ReporteInstitucionalCsv.class})
 @ImportAutoConfiguration({SecurityAutoConfiguration.class, ServletWebSecurityAutoConfiguration.class, SecurityFilterAutoConfiguration.class})
 class ReporteInstitucionalControllerTest {
@@ -150,8 +151,15 @@ class ReporteInstitucionalControllerTest {
         mvc.perform(options(URL + "/descargar").header("Origin", "http://localhost:5173")
                         .header("Access-Control-Request-Method", "GET")
                         .header("Access-Control-Request-Headers", "Authorization"))
-                .andExpect(status().isOk()).andExpect(header().string("Access-Control-Allow-Origin", "*"))
-                .andExpect(header().string("Access-Control-Expose-Headers", "Content-Disposition"));
+                .andExpect(status().isOk()).andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+                .andExpect(header().string("Access-Control-Expose-Headers", containsString("Content-Disposition")));
+        verifyNoInteractions(servicio);
+    }
+    @Test void preflightRechazaOrigenNoAutorizado() throws Exception {
+        mvc.perform(options(URL + "/descargar").header("Origin", "https://externo.example.invalid")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
         verifyNoInteractions(servicio);
     }
 }

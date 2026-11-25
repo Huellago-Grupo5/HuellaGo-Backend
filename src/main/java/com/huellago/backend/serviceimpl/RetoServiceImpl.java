@@ -13,6 +13,7 @@ import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.services.RetoService;
 import com.huellago.backend.services.UsuarioService;
 import com.huellago.backend.services.InsigniaService;
+import com.huellago.backend.services.NotificacionService;
 import com.huellago.backend.events.InformacionAmbientalActualizada;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.Objects;
 
 @Service
 public class RetoServiceImpl implements RetoService {
@@ -46,6 +50,8 @@ public class RetoServiceImpl implements RetoService {
 
     @Autowired
     InsigniaService insigniaService;
+    @Autowired
+    NotificacionService notificacionService;
 
     @Override
     public List<RetoRespuestaDTO> listarRetosActivos() {
@@ -56,6 +62,37 @@ public class RetoServiceImpl implements RetoService {
                         && reto.getRecomendacionOrigen() == null && disponible(reto, hoy))
                 .map(this::convertirADTO)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RetoRespuestaDTO> listarRetosDisponibles(Long usuarioId, String clasificacion) {
+        if (usuarioId == null || usuarioId <= 0)
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Se requiere autenticación");
+        String filtro = clasificacion == null ? null : clasificacion.trim().toUpperCase(Locale.ROOT);
+        if (filtro != null && !Set.of("DIARIO", "SEMANAL", "PERSONALIZADO", "SIN_CLASIFICACION").contains(filtro))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Clasificación de reto no válida");
+        if ("PERSONALIZADO".equals(filtro)) {
+            LocalDate hoy = LocalDate.now();
+            return usuarioRetoRepository.findByUsuario_IdAndEstadoIgnoreCaseOrderByFechaAceptacionDesc(usuarioId,"activo")
+                    .stream().filter(p -> p.getUsuario()!=null && Objects.equals(usuarioId,p.getUsuario().getId()))
+                    .map(UsuarioReto::getReto).filter(Objects::nonNull)
+                    .filter(r -> r.getRecomendacionOrigen()!=null && r.getRecomendacionOrigen().getUsuario()!=null
+                            && Objects.equals(usuarioId,r.getRecomendacionOrigen().getUsuario().getId()) && disponible(r,hoy))
+                    .map(this::convertirADTO).distinct().toList();
+        }
+        return listarRetosActivos().stream()
+                .filter(r -> filtro == null || filtro.equals(r.getClasificacion())).toList();
+    }
+
+    private String clasificacion(Reto reto) {
+        if (reto.getTipo()==TipoReto.COLECTIVO) return "COLECTIVO";
+        if (reto.getRecomendacionOrigen()!=null) return "PERSONALIZADO";
+        if (reto.getFechaInicio()!=null && reto.getFechaFin()!=null) {
+            if (reto.getFechaInicio().equals(reto.getFechaFin())) return "DIARIO";
+            if (reto.getFechaInicio().plusDays(6).equals(reto.getFechaFin())) return "SEMANAL";
+        }
+        return "SIN_CLASIFICACION";
     }
 
     @Override
@@ -201,11 +238,24 @@ public class RetoServiceImpl implements RetoService {
         int puntosRecompensa = usuarioReto.getReto().getPuntosRecompensa() == null
                 ? 0 : usuarioReto.getReto().getPuntosRecompensa();
         usuarioReto.getUsuario().setEcoPuntos(puntosActuales + puntosRecompensa);
+        Integer nivelAnterior = usuarioReto.getUsuario().getNivel();
         Usuario usuarioActualizado = usuarioService.actualizarNivel(usuarioReto.getUsuario());
-        var insigniasDesbloqueadas = insigniaService.evaluarYDesbloquearInsignias(usuarioActualizado);
+        var insigniasDesbloqueadas = new java.util.ArrayList<>(insigniaService.evaluarYDesbloquearInsignias(usuarioActualizado));
+        insigniasDesbloqueadas.addAll(insigniaService.evaluarYDesbloquearPorReto(usuarioActualizado,usuarioReto.getReto()));
 
         UsuarioRetoRespuestaDTO respuesta = convertirARespuesta(usuarioRetoRepository.save(usuarioReto));
         respuesta.setInsigniasDesbloqueadas(insigniasDesbloqueadas);
+        notificacionService.crearPorEvento(usuarioActualizado, "RETO_COMPLETADO:"+usuarioReto.getId(),
+                "Reto completado", "Completaste el reto: "+usuarioReto.getReto().getTitulo()
+                        + (puntosRecompensa > 0 ? ". Ganaste " + puntosRecompensa + " eco puntos." : "."),
+                "RETO_COMPLETADO");
+        for (var insignia : insigniasDesbloqueadas)
+            notificacionService.crearPorEvento(usuarioActualizado, "INSIGNIA:"+insignia.getId(),
+                    "Nueva insignia", "Obtuviste la insignia: "+insignia.getNombre(), "INSIGNIA");
+        if (usuarioActualizado.getNivel()!=null && nivelAnterior!=null
+                && usuarioActualizado.getNivel()>nivelAnterior)
+            notificacionService.crearPorEvento(usuarioActualizado, "NIVEL_ALCANZADO:"+usuarioActualizado.getNivel(),
+                    "Nuevo nivel", "Alcanzaste el nivel "+usuarioActualizado.getNivel(), "NIVEL");
         eventos.publishEvent(new InformacionAmbientalActualizada(usuarioId));
         return respuesta;
     }
@@ -223,7 +273,7 @@ public class RetoServiceImpl implements RetoService {
     }
 
     private RetoRespuestaDTO convertirADTO(Reto reto) {
-        return new RetoRespuestaDTO(
+        var dto = new RetoRespuestaDTO(
                 reto.getId(),
                 reto.getTitulo(),
                 reto.getDescripcion(),
@@ -235,5 +285,7 @@ public class RetoServiceImpl implements RetoService {
                 reto.getCategoria() != null ? reto.getCategoria().getId() : null,
                 reto.getCategoria() != null ? reto.getCategoria().getNombre() : null
         );
+        dto.setClasificacion(clasificacion(reto));
+        return dto;
     }
 }

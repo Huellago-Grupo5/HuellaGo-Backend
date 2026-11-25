@@ -42,6 +42,7 @@ class ReporteInstitucionalFlujoTest {
     @MockitoBean RetoRepository retos;
     @MockitoBean UsuarioRetoRepository participaciones;
     @MockitoBean ResultadoRetoColectivoRepository resultados;
+    @MockitoBean HuellaCarbonoRepository huellas;
     @MockitoBean JwtUtilService jwt;
     @MockitoBean UserDetailsService detalles;
     @MockitoBean SesionRepository sesiones;
@@ -65,6 +66,7 @@ class ReporteInstitucionalFlujoTest {
         TotalesParticipacionVista totales = mock(TotalesParticipacionVista.class);
         when(totales.getTotal()).thenReturn(1L); when(totales.getUsuarios()).thenReturn(1L);
         when(participaciones.totalesParaReporte(eq(1L), any(), any(), any())).thenReturn(totales);
+        when(huellas.historialInstitucional(1L)).thenReturn(List.of());
     }
     UsernamePasswordAuthenticationToken identidad(long id) {
         Usuario u = new Usuario(); u.setId(id); UserSecurity p = new UserSecurity(u);

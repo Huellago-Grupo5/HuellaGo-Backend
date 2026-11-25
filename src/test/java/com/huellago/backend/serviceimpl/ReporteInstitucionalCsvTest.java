@@ -48,8 +48,8 @@ class ReporteInstitucionalCsvTest {
     @Test void comasComillasYSaltosNoRompenColumnas() {
         String nombre = "Movilidad, \"limpia\""; String objetivo = "Reducir\r\nviajes\ny emisiones";
         var filas = leer(texto(reporte(nombre, objetivo, 2)));
-        assertEquals(3, filas.size()); assertEquals(33, filas.getFirst().size());
-        for (var fila : filas) assertEquals(33, fila.size());
+        assertEquals(3, filas.size()); assertEquals(49, filas.getFirst().size());
+        for (var fila : filas) assertEquals(49, fila.size());
         assertEquals(nombre, filas.get(1).get(21)); assertEquals(objetivo, filas.get(1).get(22));
     }
     @Test void protegeTodosLosPrefijosDeFormulasIncluyendoEspaciosYControles() {
@@ -72,7 +72,7 @@ class ReporteInstitucionalCsvTest {
         var filas = leer(texto(reporte("No usada", "", 0)));
         assertEquals(2, filas.size()); assertEquals("RESUMEN_SIN_CAMPANAS", filas.get(1).getFirst());
         assertEquals("0", filas.get(1).get(7)); assertEquals("", filas.get(1).get(20));
-        assertEquals(33, filas.get(1).size());
+        assertEquals(49, filas.get(1).size());
     }
     @Test void camposNulosNoSeConviertenEnValoresInventados() {
         var base = reporte("Campaña", "Objetivo", 1);
@@ -81,6 +81,23 @@ class ReporteInstitucionalCsvTest {
         var r = new ReporteInstitucionalDTO(base.institucion(), base.generadoEl(), base.filtros(), base.resumen(), List.of(c), List.of("Faltan datos"));
         var fila = leer(texto(r)).get(1); assertEquals("", fila.get(21)); assertEquals("", fila.get(29));
         assertEquals("Faltan datos", fila.get(32));
+    }
+    @Test void exportaPromedioYLimitacionesSinAlterarColumnasPrevias() {
+        var base = reporte("Campaña", "Objetivo", 1);
+        var huella = new ReporteInstitucionalDTO.HuellaPromedio(3, 2, 2,
+                new BigDecimal("30.00"), "kg CO2e", "semanal", "ORIENTATIVO_NO_CERTIFICADO",
+                "Alcance mixto personal y hogar");
+        var impacto = new ReporteInstitucionalDTO.SeguimientoImpacto(1, 0, null, null,
+                "METODOLOGIA_NO_VERIFICABLE", "Sin versión de factores");
+        var ampliado = new ReporteInstitucionalDTO(base.institucion(), base.generadoEl(),
+                base.filtros(), base.resumen(), base.campanas(), base.advertencias(), huella, impacto);
+        var fila = leer(texto(ampliado)).get(1);
+        assertEquals("3", fila.get(33));
+        assertEquals("2", fila.get(35));
+        assertEquals("30.00", fila.get(36));
+        assertEquals("semanal", fila.get(38));
+        assertEquals("", fila.get(43));
+        assertEquals("METODOLOGIA_NO_VERIFICABLE", fila.get(45));
     }
     @Test void milesDeCampanasConservanNumeroDeFilasYContenidoFinal() {
         var filas = leer(texto(reporte("Campaña amplia", "Objetivo", 5000)));

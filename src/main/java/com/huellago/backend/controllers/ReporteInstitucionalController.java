@@ -1,5 +1,10 @@
 package com.huellago.backend.controllers;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import com.huellago.backend.dtos.ReporteInstitucionalDTO;
 import com.huellago.backend.security.UserSecurity;
 import com.huellago.backend.services.ReporteInstitucionalService;
@@ -14,8 +19,9 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
+@Tag(name = "Reportes institucionales", description = "Solo el administrador autorizado consulta datos agregados de su institución. Las huellas y variaciones son orientativas.")
+@SecurityRequirement(name = "bearerAuth")
 @RestController
-@CrossOrigin(origins = "*", exposedHeaders = HttpHeaders.CONTENT_DISPOSITION)
 @RequestMapping("/instituciones/{institucionId}/reportes/desempeno-ambiental")
 public class ReporteInstitucionalController {
     private final ReporteInstitucionalService servicio;
@@ -26,6 +32,7 @@ public class ReporteInstitucionalController {
         this.csv = csv;
     }
 
+    @Operation(summary = "Consultar reporte institucional", description = "Consultar reporte institucional. Solo el administrador autorizado consulta datos agregados de su institución. Las huellas y variaciones son orientativas.")
     @GetMapping
     public ResponseEntity<ReporteInstitucionalDTO> consultar(@PathVariable Long institucionId,
             @AuthenticationPrincipal UserSecurity usuario,
@@ -36,6 +43,8 @@ public class ReporteInstitucionalController {
                 .body(servicio.consultar(institucionId, usuario == null ? null : usuario.getUser(), desde, hasta, campanaId));
     }
 
+    @Operation(summary = "Descargar reporte institucional CSV", description = "Descargar reporte institucional CSV. Solo el administrador autorizado consulta datos agregados de su institución. Las huellas y variaciones son orientativas.")
+    @ApiResponse(responseCode = "200", description = "Archivo CSV UTF-8 adjunto", headers = @io.swagger.v3.oas.annotations.headers.Header(name = "Content-Disposition", description = "Nombre del archivo adjunto"), content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "text/csv", schema = @io.swagger.v3.oas.annotations.media.Schema(type = "string", format = "binary")))
     @GetMapping("/descargar")
     public ResponseEntity<byte[]> descargar(@PathVariable Long institucionId,
             @AuthenticationPrincipal UserSecurity usuario,

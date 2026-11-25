@@ -13,6 +13,7 @@ import com.huellago.backend.dtos.PreferenciaNotificacionActualizarDTO;
 import com.huellago.backend.dtos.PreferenciaNotificacionDTO;
 import com.huellago.backend.dtos.PrivacidadActualizarDTO;
 import com.huellago.backend.dtos.PrivacidadDTO;
+import com.huellago.backend.dtos.RankingComunitarioDTO;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.Sesion;
 import com.huellago.backend.repositories.SesionRepository;
@@ -264,6 +265,29 @@ public class UsuarioServiceImpl implements UsuarioService {
                 usuario.getVisibilidadComunidad(),
                 usuario.getFechaActualizacion()
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RankingComunitarioDTO obtenerRankingComunitario(Usuario usuarioAutenticado) {
+        if (usuarioAutenticado == null || usuarioAutenticado.getId() == null)
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Se requiere autenticación");
+
+        var filas = usuarioRepository.listarRankingComunitario();
+        var participantes = new java.util.ArrayList<RankingComunitarioDTO.Participante>(filas.size());
+        Integer miPosicion = null;
+        for (var fila : filas) {
+            int posicion = participantes.size() + 1;
+            String nombre = fila.getNombres();
+            if (nombre == null || nombre.isBlank()) nombre = "Usuario de HuellaGo";
+            participantes.add(new RankingComunitarioDTO.Participante(posicion, nombre.trim(),
+                    fila.getEcoPuntos(), fila.getNivel()));
+            if (usuarioAutenticado.getId().equals(fila.getId())) miPosicion = posicion;
+        }
+        String mensaje = participantes.isEmpty() ? "No hay participantes visibles en el ranking."
+                : participantes.size() == 1 ? "Aún no hay otros participantes visibles para comparar."
+                : null;
+        return new RankingComunitarioDTO(participantes, miPosicion, mensaje);
     }
 
 }

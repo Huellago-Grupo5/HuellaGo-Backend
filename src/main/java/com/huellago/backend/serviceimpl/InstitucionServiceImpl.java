@@ -2,8 +2,10 @@ package com.huellago.backend.serviceimpl;
 
 import com.huellago.backend.dtos.InstitucionRegistroDTO;
 import com.huellago.backend.dtos.InstitucionRespuestaDTO;
+import com.huellago.backend.dtos.RankingInstitucionalDTO;
 import com.huellago.backend.entities.*;
 import com.huellago.backend.repositories.InstitucionRepository;
+import com.huellago.backend.repositories.GrupoInstitucionalRepository;
 import com.huellago.backend.repositories.UsuarioInstitucionRepository;
 import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.services.InstitucionService;
@@ -20,12 +22,15 @@ public class InstitucionServiceImpl implements InstitucionService {
     private final InstitucionRepository instituciones;
     private final UsuarioInstitucionRepository afiliaciones;
     private final UsuarioRepository usuarios;
+    private final GrupoInstitucionalRepository grupos;
 
     public InstitucionServiceImpl(InstitucionRepository instituciones,
-            UsuarioInstitucionRepository afiliaciones, UsuarioRepository usuarios) {
+            UsuarioInstitucionRepository afiliaciones, UsuarioRepository usuarios,
+            GrupoInstitucionalRepository grupos) {
         this.instituciones = instituciones;
         this.afiliaciones = afiliaciones;
         this.usuarios = usuarios;
+        this.grupos = grupos;
     }
 
     @Override
@@ -81,6 +86,38 @@ public class InstitucionServiceImpl implements InstitucionService {
                     "No tienes acceso administrativo a esta institución");
         }
         return respuesta(institucion, usuarioId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RankingInstitucionalDTO consultarRanking(Long usuarioId, Long institucionId) {
+        if (usuarioId == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                "Se requiere autenticación");
+        if (institucionId == null || institucionId <= 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Institución inválida");
+        if (!instituciones.existsById(institucionId)) throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                "Institución no encontrada");
+        if (!afiliaciones.existsByUsuario_IdAndInstitucion_IdAndRol(
+                usuarioId, institucionId, RolInstitucional.ADMIN_INSTITUCIONAL))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "No tienes acceso administrativo a esta institución");
+        var filas = afiliaciones.listarRanking(institucionId);
+        var participantes = new java.util.ArrayList<RankingInstitucionalDTO.Participante>(filas.size());
+        Integer miPosicion = null;
+        for (var fila : filas) {
+            int posicion = participantes.size() + 1;
+            String nombre = fila.getNombre();
+            if (nombre == null || nombre.isBlank()) nombre = "Usuario de HuellaGo";
+            participantes.add(new RankingInstitucionalDTO.Participante(posicion, nombre.trim(),
+                    fila.getEcoPuntos(), fila.getNivel()));
+            if (usuarioId.equals(fila.getUsuarioId())) miPosicion = posicion;
+        }
+        boolean gruposDisponibles = !grupos.findByInstitucion_IdOrderByIdAsc(institucionId).isEmpty();
+        String mensaje = participantes.isEmpty() ? "No hay miembros visibles con puntuación registrada."
+                : participantes.size() == 1 ? "Aún no hay otros miembros visibles para comparar."
+                : gruposDisponibles ? "Ranking individual de miembros visibles."
+                : "No hay agrupaciones de equipos o facultades registradas.";
+        return new RankingInstitucionalDTO(institucionId, participantes, miPosicion, gruposDisponibles, mensaje);
     }
 
     private InstitucionRespuestaDTO respuesta(Institucion institucion, Long representanteId) {

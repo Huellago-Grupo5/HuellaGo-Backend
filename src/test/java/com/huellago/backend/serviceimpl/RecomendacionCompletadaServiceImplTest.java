@@ -42,6 +42,7 @@ class RecomendacionCompletadaServiceImplTest {
         usuario.setId(77L);
         usuario.setEcoPuntos(30);
         usuario.setNivel(1);
+        lenient().when(usuarios.bloquearParaRecomendaciones(77L)).thenReturn(Optional.of(77L));
         RecomendacionIA recomendacion = new RecomendacionIA();
         recomendacion.setId(8);
         recomendacion.setTitulo("Separar residuos");
@@ -67,13 +68,14 @@ class RecomendacionCompletadaServiceImplTest {
         assertNotNull(dto.fechaCompletado());
         assertEquals(asociacion.getFechaGeneracion(), dto.fechaGeneracion());
         assertEquals(8, dto.recomendacionId());
-        InOrder orden = inOrder(asociaciones);
+        InOrder orden = inOrder(usuarios, asociaciones);
+        orden.verify(usuarios).bloquearParaRecomendaciones(77L);
         orden.verify(asociaciones).bloquearPropia(3, 77L);
         orden.verify(asociaciones).findByIdAndUsuario_Id(3, 77L);
         orden.verify(asociaciones).saveAndFlush(asociacion);
         assertEquals(30, usuario.getEcoPuntos());
         assertEquals(1, usuario.getNivel());
-        verifyNoInteractions(retos, participaciones, usuarios);
+        verifyNoInteractions(retos, participaciones);
     }
 
     @Test
@@ -147,6 +149,7 @@ class RecomendacionCompletadaServiceImplTest {
         assertThrows(DataIntegrityViolationException.class, () -> transaccional.completar(3, usuario));
         verify(transacciones).rollback(estado);
         verify(transacciones, never()).commit(any());
-        verifyNoInteractions(retos, participaciones, usuarios);
+        verify(usuarios).bloquearParaRecomendaciones(77L);
+        verifyNoInteractions(retos, participaciones);
     }
 }

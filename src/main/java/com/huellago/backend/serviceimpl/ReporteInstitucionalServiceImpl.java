@@ -27,15 +27,20 @@ public class ReporteInstitucionalServiceImpl implements ReporteInstitucionalServ
     private final RetoRepository retos;
     private final UsuarioRetoRepository participaciones;
     private final ResultadoRetoColectivoRepository resultados;
+    private final UsuarioInstitucionRepository afiliaciones;
+    private final HuellaCarbonoRepository huellas;
 
     public ReporteInstitucionalServiceImpl(InstitucionRepository instituciones,
             AutorizacionInstitucionalService autorizacion, RetoRepository retos,
-            UsuarioRetoRepository participaciones, ResultadoRetoColectivoRepository resultados) {
+            UsuarioRetoRepository participaciones, ResultadoRetoColectivoRepository resultados,
+            UsuarioInstitucionRepository afiliaciones, HuellaCarbonoRepository huellas) {
         this.instituciones = instituciones;
         this.autorizacion = autorizacion;
         this.retos = retos;
         this.participaciones = participaciones;
         this.resultados = resultados;
+        this.afiliaciones = afiliaciones;
+        this.huellas = huellas;
     }
 
     @Override
@@ -84,10 +89,123 @@ public class ReporteInstitucionalServiceImpl implements ReporteInstitucionalServ
             total = totales.getTotal();
             usuarios = totales.getUsuarios();
         }
+        var historialHuellas = huellas.historialInstitucional(institucionId);
+        var huella = huella(institucionId, historialHuellas);
         return new ReporteInstitucionalDTO(new ReporteInstitucionalDTO.InstitucionDatos(
                 institucion.getId(), institucion.getNombre()), fecha,
                 new ReporteInstitucionalDTO.Filtros(desde, hasta, campanaId),
-                resumen(campanas, total, usuarios), campanas, advertencias);
+                resumen(campanas, total, usuarios), campanas, advertencias, huella,
+                seguimiento(historialHuellas, desde, hasta));
+    }
+
+    private ReporteInstitucionalDTO.HuellaPromedio huella(Long institucionId,
+            List<HuellaCarbonoRepository.FilaInstitucional> filas) {
+        long miembros = afiliaciones.countByInstitucion_Id(institucionId);
+        Set<Long> observados = new HashSet<>();
+        long conCalculo = 0;
+        long considerados = 0;
+        BigDecimal suma = BigDecimal.ZERO;
+        for (var fila : filas) {
+            if (fila.getUsuarioId() == null || !observados.add(fila.getUsuarioId())) continue;
+            conCalculo++;
+            if (!completa(fila)) continue;
+            considerados++;
+            suma = suma.add(fila.getCo2Total());
+        }
+        // Evita que un promedio de uno o dos miembros revele una huella individual.
+        BigDecimal promedio = considerados < 3 ? null
+                : suma.divide(BigDecimal.valueOf(considerados), 2, RoundingMode.HALF_UP);
+        String limitaciones = "Promedio orientativo de la última huella semanal completa por miembro; "
+                + "alcance mixto personal y hogar. No atribuye toda la energía del hogar al individuo. "
+                + "El registro histórico no conserva versión metodológica ni acredita vigencia frente a hábitos posteriores. "
+                + "El promedio se muestra solo con al menos tres miembros con huella completa.";
+        return new ReporteInstitucionalDTO.HuellaPromedio(miembros, conCalculo, considerados,
+                promedio, "kg CO2e", "semanal", considerados < 3 ? "COHORTE_INSUFICIENTE"
+                        : "ORIENTATIVO_NO_CERTIFICADO", limitaciones);
+    }
+
+    private record ClaveMetodo(String version, String periodo, String unidad,
+            String perimetro, String factores) { }
+    private record ParHuella(HuellaCarbonoRepository.FilaInstitucional inicial,
+            HuellaCarbonoRepository.FilaInstitucional finalizada) { }
+
+    private ReporteInstitucionalDTO.SeguimientoImpacto seguimiento(
+            List<HuellaCarbonoRepository.FilaInstitucional> filas, LocalDate desde, LocalDate hasta) {
+        Map<Long, List<HuellaCarbonoRepository.FilaInstitucional>> porUsuario = new HashMap<>();
+        for (var fila : filas) {
+            if (fila.getUsuarioId() == null || !completa(fila) || !enPeriodo(fila.getFechaCalculo(), desde, hasta))
+                continue;
+            porUsuario.computeIfAbsent(fila.getUsuarioId(), ignorado -> new ArrayList<>()).add(fila);
+        }
+        long paresCompletos = porUsuario.values().stream()
+                .filter(historial -> historial.stream().map(HuellaCarbonoRepository.FilaInstitucional::getFechaCalculo)
+                        .distinct().limit(2).count() == 2).count();
+        Map<ClaveMetodo, List<ParHuella>> cohortes = new HashMap<>();
+        for (var historial : porUsuario.values()) {
+            var finalizada = historial.stream().filter(fila -> clave(fila) != null).findFirst().orElse(null);
+            if (finalizada == null) continue;
+            ClaveMetodo clave = clave(finalizada);
+            HuellaCarbonoRepository.FilaInstitucional inicial = null;
+            for (var fila : historial)
+                if (clave.equals(clave(fila)) && fila.getFechaCalculo().isBefore(finalizada.getFechaCalculo()))
+                    inicial = fila;
+            if (inicial != null)
+                cohortes.computeIfAbsent(clave, ignorado -> new ArrayList<>())
+                        .add(new ParHuella(inicial, finalizada));
+        }
+        var seleccion = cohortes.entrySet().stream()
+                .sorted(Comparator.<Map.Entry<ClaveMetodo, List<ParHuella>>>comparingInt(
+                        entrada -> entrada.getValue().size()).reversed()
+                        .thenComparing(entrada -> entrada.getKey().toString()))
+                .findFirst().orElse(null);
+        String limites = "Estimación orientativa de huella semanal de alcance mixto personal y hogar; "
+                + "solo compara pares del mismo miembro, versión, unidad, período, perímetro y factores. "
+                + "La variación no demuestra que una campaña haya causado el cambio.";
+        if (seleccion == null || seleccion.getValue().size() < 3)
+            return new ReporteInstitucionalDTO.SeguimientoImpacto(paresCompletos, 0, null, null,
+                    paresCompletos == 0 ? "DATOS_INSUFICIENTES"
+                            : seleccion == null ? "METODOLOGIA_NO_VERIFICABLE" : "COHORTE_INSUFICIENTE",
+                    limites, null, null);
+
+        BigDecimal inicial = BigDecimal.ZERO, finalizada = BigDecimal.ZERO;
+        for (var par : seleccion.getValue()) {
+            inicial = inicial.add(par.inicial().getCo2Total());
+            finalizada = finalizada.add(par.finalizada().getCo2Total());
+        }
+        BigDecimal variacion = finalizada.subtract(inicial);
+        BigDecimal porcentaje = inicial.signum() == 0 ? null : variacion
+                .multiply(BigDecimal.valueOf(100)).divide(inicial, 2, RoundingMode.HALF_UP);
+        String estado = inicial.signum() == 0 ? "BASE_INICIAL_CERO"
+                : variacion.signum() < 0 ? "REDUCCION_ORIENTATIVA"
+                : variacion.signum() > 0 ? "AUMENTO_ORIENTATIVO" : "SIN_CAMBIO";
+        return new ReporteInstitucionalDTO.SeguimientoImpacto(paresCompletos,
+                seleccion.getValue().size(), variacion, porcentaje, estado, limites,
+                inicial, finalizada);
+    }
+
+    private boolean enPeriodo(LocalDateTime fecha, LocalDate desde, LocalDate hasta) {
+        LocalDate dia = fecha.toLocalDate();
+        return (desde == null || !dia.isBefore(desde)) && (hasta == null || !dia.isAfter(hasta));
+    }
+
+    private ClaveMetodo clave(HuellaCarbonoRepository.FilaInstitucional fila) {
+        if (!"HUELLAGO_SEMANAL_V1".equals(fila.getMetodologiaVersion())
+                || !"semanal".equals(fila.getPeriodoCalculo())
+                || !"kg CO2e".equals(fila.getUnidadCalculo())
+                || !"PERSONAL_Y_HOGAR".equals(fila.getPerimetroCalculo())
+                || fila.getFactoresAplicados() == null || fila.getFactoresAplicados().isBlank()) return null;
+        return new ClaveMetodo(fila.getMetodologiaVersion(), fila.getPeriodoCalculo(),
+                fila.getUnidadCalculo(), fila.getPerimetroCalculo(), fila.getFactoresAplicados());
+    }
+
+    private boolean completa(HuellaCarbonoRepository.FilaInstitucional fila) {
+        return fila.getFechaCalculo() != null && noNegativo(fila.getCo2Total())
+                && noNegativo(fila.getCo2Transporte()) && noNegativo(fila.getCo2Energia())
+                && noNegativo(fila.getCo2Alimentacion()) && noNegativo(fila.getCo2Residuos());
+    }
+
+    private boolean noNegativo(BigDecimal valor) {
+        return valor != null && valor.signum() >= 0;
     }
 
     private ReporteInstitucionalDTO.Campana campana(CampanaReporteVista campana,
@@ -100,7 +218,7 @@ public class ReporteInstitucionalServiceImpl implements ReporteInstitucionalServ
         var cierre = resultado == null ? null : new CalculoSeguimientoColectivo.Cierre(
                 resultado.getParticipantes(), resultado.getProgresoFinal(), resultado.getEstado(), resultado.getFechaCierre());
         var seguimiento = CalculoSeguimientoColectivo.resumen(datos, Math.toIntExact(cantidad), suma, cierre, hoy);
-        String estado = CalculoSeguimientoColectivo.estadoCampana(datos, hoy);
+        String estado = CalculoSeguimientoColectivo.estadoCampana(datos, cierre, hoy);
         if ("DATOS_INCOMPLETOS".equals(estado)) advertencias.add("Campaña " + campana.getId() + ": fechas incompletas");
         if (resultado != null && !Objects.equals(resultado.getParticipantes(), Math.toIntExact(cantidad))) {
             advertencias.add("Campaña " + campana.getId() + ": las participaciones actuales difieren del cierre conservado");

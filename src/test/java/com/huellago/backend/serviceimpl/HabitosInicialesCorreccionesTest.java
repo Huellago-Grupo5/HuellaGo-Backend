@@ -119,7 +119,7 @@ class HabitosInicialesCorreccionesTest {
         var resultado=calculo.calcularHuellaInicial(9001L);
         assertEquals(0,new BigDecimal("10.5").compareTo(resultado.getCo2Total()));
         assertEquals("kg CO2e",resultado.getUnidad()); assertEquals("semanal",resultado.getPeriodo());
-        assertEquals("NO_DEFINIDO",resultado.getNivelImpacto()); verify(huellas).save(any());
+        assertEquals("BAJO",resultado.getNivelImpacto()); verify(huellas).save(any());
     }
     @Test void categoriaConCampoInvalidoODuplicadoNoCuentaComoCompleta() {
         completos(); filas.get(2).setValor(new BigDecimal("8"));

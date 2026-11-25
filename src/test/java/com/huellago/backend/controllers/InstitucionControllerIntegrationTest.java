@@ -1,6 +1,7 @@
 package com.huellago.backend.controllers;
 
 import com.huellago.backend.dtos.InstitucionRespuestaDTO;
+import com.huellago.backend.dtos.RankingInstitucionalDTO;
 import com.huellago.backend.entities.*;
 import com.huellago.backend.repositories.SesionRepository;
 import com.huellago.backend.security.*;
@@ -96,6 +97,19 @@ class InstitucionControllerIntegrationTest {
         mvc.perform(get("/instituciones/7/administracion").with(authentication(autenticacion(22L))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(7));
         verify(servicio).consultarAdministracion(22L, 7L);
+    }
+
+    @Test
+    void rankingExigeJwtYUsaElAdministradorAutenticado() throws Exception {
+        mvc.perform(get("/instituciones/7/ranking")).andExpect(status().isUnauthorized());
+        when(servicio.consultarRanking(22L, 7L)).thenReturn(new RankingInstitucionalDTO(
+                7L, java.util.List.of(new RankingInstitucionalDTO.Participante(1, "Ana", 80, 2)),
+                null, false, "No hay agrupaciones registradas"));
+        mvc.perform(get("/instituciones/7/ranking").with(authentication(autenticacion(22L))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.participantes[0].ecoPuntos").value(80))
+                .andExpect(jsonPath("$.participantes[0].correo").doesNotExist());
+        verify(servicio).consultarRanking(22L, 7L);
     }
 
     private UsernamePasswordAuthenticationToken autenticacion(Long id) {

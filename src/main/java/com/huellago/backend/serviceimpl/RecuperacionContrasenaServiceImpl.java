@@ -39,7 +39,7 @@ public class RecuperacionContrasenaServiceImpl implements com.huellago.backend.s
         // No revelar existencia ni producir tokens si no hay un canal de entrega configurado.
         correo.verificarConfiguracion();
         var usuario = usuarios.findByCorreoNormalizado(ValidacionCuenta.correo(dto.getCorreo()));
-        if (usuario == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
+        if (usuario == null) return new RecuperacionRespuestaDTO("Si la cuenta existe, se enviara un enlace de recuperacion al correo registrado");
         usuarios.bloquearParaRecomendaciones(usuario.getId()).orElseThrow(this::invalido);
         entityManager.refresh(usuario);
         recuperaciones.eliminarDelUsuario(usuario.getId());
@@ -50,7 +50,7 @@ public class RecuperacionContrasenaServiceImpl implements com.huellago.backend.s
         fila.setCreadoEn(Instant.now()); fila.setExpiraEn(fila.getCreadoEn().plus(Duration.ofMinutes(15)));
         recuperaciones.saveAndFlush(fila);
         correo.enviar(usuario.getCorreo(), secreto);
-        return new RecuperacionRespuestaDTO("El enlace fue aceptado por el servicio de correo para su envío");
+        return new RecuperacionRespuestaDTO("Si la cuenta existe, se enviara un enlace de recuperacion al correo registrado");
     }
     @Transactional
     public void restablecer(RestablecerContrasenaDTO dto) {

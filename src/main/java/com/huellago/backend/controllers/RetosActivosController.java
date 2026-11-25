@@ -1,12 +1,15 @@
 package com.huellago.backend.controllers;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import com.huellago.backend.dtos.ActualizarProgresoDTO;
 import com.huellago.backend.dtos.UsuarioRetoRespuestaDTO;
 import com.huellago.backend.security.UserSecurity;
 import com.huellago.backend.services.RetoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -21,14 +24,16 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import java.util.List;
 import java.util.Map;
 
+@Tag(name = "Retos", description = "Consulta y actualiza participaciones propias; la finalización aplica recompensas vigentes.")
+@SecurityRequirement(name = "bearerAuth")
 @RestController
-@CrossOrigin("*")
 @RequestMapping("/retos-activos")
 public class RetosActivosController {
 
     @Autowired
     RetoService retoService;
 
+    @Operation(summary = "Listar mis retos activos", description = "Listar mis retos activos. Consulta y actualiza participaciones propias; la finalización aplica recompensas vigentes.")
     @GetMapping
     public ResponseEntity<List<UsuarioRetoRespuestaDTO>> listarRetosActivos(
             @AuthenticationPrincipal UserSecurity userSecurity) {
@@ -36,6 +41,7 @@ public class RetosActivosController {
                 retoService.listarRetosActivos(userSecurity.getUser().getId()));
     }
 
+    @Operation(summary = "Actualizar progreso de reto propio", description = "Actualizar progreso de reto propio. Consulta y actualiza participaciones propias; la finalización aplica recompensas vigentes.")
     @PutMapping("/{id}/progreso")
     public ResponseEntity<UsuarioRetoRespuestaDTO> actualizarProgreso(
             @PathVariable("id") Integer usuarioRetoId,
@@ -45,6 +51,7 @@ public class RetosActivosController {
                 usuarioRetoId, userSecurity.getUser().getId(), actualizarProgresoDTO));
     }
 
+    @Operation(summary = "Completar reto propio", description = "Completar reto propio. Consulta y actualiza participaciones propias; la finalización aplica recompensas vigentes.")
     @PutMapping("/{id}/completar")
     public ResponseEntity<UsuarioRetoRespuestaDTO> completarReto(
             @PathVariable("id") Integer usuarioRetoId,

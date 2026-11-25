@@ -10,6 +10,7 @@ import com.huellago.backend.repositories.RetoRepository;
 import com.huellago.backend.repositories.UsuarioRetoRepository;
 import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.services.InsigniaService;
+import com.huellago.backend.services.NotificacionService;
 import com.huellago.backend.services.UsuarioService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +38,7 @@ class RetoFinalizacionServiceImplTest {
     @Mock UsuarioRepository usuariosRepository;
     @Mock UsuarioService usuarios;
     @Mock InsigniaService insignias;
+    @Mock NotificacionService notificaciones;
     @InjectMocks RetoServiceImpl servicio;
 
     @Test
@@ -51,6 +53,10 @@ class RetoFinalizacionServiceImplTest {
                 .thenReturn(List.of(new InsigniaRespuestaDTO(1, "Primer paso verde",
                         "Insignia por puntos", "/img/primer-paso-verde.png", 10,
                         LocalDateTime.now(), true)));
+        when(insignias.evaluarYDesbloquearPorReto(participacion.getUsuario(), participacion.getReto()))
+                .thenReturn(List.of(new InsigniaRespuestaDTO(2, "Reto de transporte completado",
+                        "Insignia por reto", "/img/reto-transporte-completado.png", null,
+                        LocalDateTime.now(), true)));
         when(participaciones.save(participacion)).thenReturn(participacion);
 
         var respuesta = servicio.completarReto(29, 22L);
@@ -64,12 +70,39 @@ class RetoFinalizacionServiceImplTest {
         assertEquals(aceptacion, respuesta.getFechaAceptacion());
         assertEquals(aceptacion, participacion.getFechaAceptacion());
         assertEquals(110, participacion.getUsuario().getEcoPuntos());
-        assertEquals(1, respuesta.getInsigniasDesbloqueadas().size());
+        assertEquals(2, respuesta.getInsigniasDesbloqueadas().size());
         assertEquals("Primer paso verde", respuesta.getInsigniasDesbloqueadas().getFirst().getNombre());
+        assertEquals("Reto de transporte completado", respuesta.getInsigniasDesbloqueadas().get(1).getNombre());
         verify(participaciones).save(participacion);
         verify(usuarios).actualizarNivel(participacion.getUsuario());
         verify(insignias).evaluarYDesbloquearInsignias(participacion.getUsuario());
+        verify(insignias).evaluarYDesbloquearPorReto(participacion.getUsuario(), participacion.getReto());
+        verify(notificaciones).crearPorEvento(eq(participacion.getUsuario()),eq("RETO_COMPLETADO:29"),anyString(),anyString(),eq("RETO_COMPLETADO"));
+        verify(notificaciones).crearPorEvento(eq(participacion.getUsuario()),eq("INSIGNIA:1"),anyString(),anyString(),eq("INSIGNIA"));
+        verify(notificaciones).crearPorEvento(eq(participacion.getUsuario()),eq("INSIGNIA:2"),anyString(),anyString(),eq("INSIGNIA"));
+        verify(notificaciones,times(3)).crearPorEvento(any(),anyString(),anyString(),anyString(),anyString());
         verify(eventos).publishEvent(new com.huellago.backend.events.InformacionAmbientalActualizada(22L));
+    }
+
+    @Test
+    void subidaDeNivelGeneraAvisoAdicionalEnLaFinalizacion() {
+        UsuarioReto participacion = participacion();
+        participacion.setProgreso(BigDecimal.valueOf(100));
+        participacion.getUsuario().setNivel(1);
+        prepararPropietario(participacion);
+        when(usuarios.actualizarNivel(participacion.getUsuario())).thenAnswer(invocacion -> {
+            Usuario usuario = invocacion.getArgument(0);
+            usuario.setNivel(2);
+            return usuario;
+        });
+        when(participaciones.save(participacion)).thenReturn(participacion);
+
+        servicio.completarReto(29, 22L);
+
+        verify(notificaciones).crearPorEvento(eq(participacion.getUsuario()), eq("NIVEL_ALCANZADO:2"),
+                anyString(), anyString(), eq("NIVEL"));
+        verify(notificaciones).crearPorEvento(eq(participacion.getUsuario()), eq("RETO_COMPLETADO:29"),
+                anyString(), contains("100 eco puntos"), eq("RETO_COMPLETADO"));
     }
 
     @Test
@@ -147,6 +180,8 @@ class RetoFinalizacionServiceImplTest {
         primera.getReto().setPuntosRecompensa(20);
         prepararPropietario(primera);
         when(usuarios.actualizarNivel(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+        when(insignias.evaluarYDesbloquearInsignias(any())).thenReturn(List.of());
+        when(insignias.evaluarYDesbloquearPorReto(any(), any())).thenReturn(List.of());
         when(participaciones.save(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
 
         servicio.completarReto(29, 22L);

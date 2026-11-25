@@ -38,6 +38,14 @@ INSERT INTO insignias (nombre, descripcion, imagen_url, puntos_requeridos)
 SELECT 'Maestro sostenible', 'Alcanzaste 500 eco-puntos.', '/img/maestro-sostenible.png', 500
 WHERE NOT EXISTS (SELECT 1 FROM insignias WHERE nombre = 'Maestro sostenible');
 
+INSERT INTO insignias (nombre, descripcion, imagen_url, puntos_requeridos)
+SELECT 'Reto de transporte completado', 'Completaste un reto individual de Transporte.', '/img/reto-transporte-completado.png', NULL
+WHERE NOT EXISTS (SELECT 1 FROM insignias WHERE nombre = 'Reto de transporte completado');
+
+INSERT INTO insignias (nombre, descripcion, imagen_url, puntos_requeridos)
+SELECT 'Reto de energía completado', 'Completaste un reto individual de Energía.', '/img/reto-energia-completado.png', NULL
+WHERE NOT EXISTS (SELECT 1 FROM insignias WHERE nombre = 'Reto de energía completado');
+
 INSERT INTO retos (titulo, descripcion, dificultad, fecha_inicio, fecha_fin, puntos_recompensa, activo, categoria_id)
 SELECT 'Reto transporte sostenible', 'Usa bicicleta o camina durante una semana para reducir tu huella de carbono.',
        'Media', DATE '2026-10-04', DATE '2026-10-11', 100, TRUE, c.id

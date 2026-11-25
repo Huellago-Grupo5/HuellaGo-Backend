@@ -14,6 +14,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -24,6 +25,7 @@ class InstitucionServiceImplTest {
     @Mock InstitucionRepository instituciones;
     @Mock UsuarioInstitucionRepository afiliaciones;
     @Mock UsuarioRepository usuarios;
+    @Mock GrupoInstitucionalRepository grupos;
     @InjectMocks InstitucionServiceImpl servicio;
     private Usuario representante;
 
@@ -31,6 +33,67 @@ class InstitucionServiceImplTest {
     void preparar() {
         representante = new Usuario();
         representante.setId(22L);
+    }
+
+    @Test void rankingIndividualInformaSiExistenGruposSinCambiarParticipantes() {
+        when(instituciones.existsById(5L)).thenReturn(true);
+        when(afiliaciones.existsByUsuario_IdAndInstitucion_IdAndRol(
+                22L, 5L, RolInstitucional.ADMIN_INSTITUCIONAL)).thenReturn(true);
+        GrupoInstitucional grupo = new GrupoInstitucional();
+        grupo.setNombre("Equipo A");
+        when(grupos.findByInstitucion_IdOrderByIdAsc(5L)).thenReturn(List.of(grupo));
+        var ranking = servicio.consultarRanking(22L, 5L);
+        assertTrue(ranking.gruposDisponibles());
+        assertTrue(ranking.participantes().isEmpty());
+    }
+
+    @Test void rankingInstitucionalOrdenadoYLimitadoAMiembrosVisibles() {
+        when(instituciones.existsById(5L)).thenReturn(true);
+        when(afiliaciones.existsByUsuario_IdAndInstitucion_IdAndRol(
+                22L, 5L, RolInstitucional.ADMIN_INSTITUCIONAL)).thenReturn(true);
+        var primero = mock(UsuarioInstitucionRepository.FilaRankingInstitucional.class);
+        when(primero.getUsuarioId()).thenReturn(22L);
+        when(primero.getNombre()).thenReturn(" Administrador ");
+        when(primero.getEcoPuntos()).thenReturn(90);
+        when(primero.getNivel()).thenReturn(2);
+        var segundo = mock(UsuarioInstitucionRepository.FilaRankingInstitucional.class);
+        when(segundo.getUsuarioId()).thenReturn(70L);
+        when(segundo.getNombre()).thenReturn("Miembro");
+        when(segundo.getEcoPuntos()).thenReturn(50);
+        when(segundo.getNivel()).thenReturn(1);
+        when(afiliaciones.listarRanking(5L)).thenReturn(List.of(primero, segundo));
+
+        var ranking = servicio.consultarRanking(22L, 5L);
+
+        assertEquals(2, ranking.participantes().size());
+        assertEquals(1, ranking.miPosicion());
+        assertEquals("Administrador", ranking.participantes().getFirst().nombreVisible());
+        assertEquals(90, ranking.participantes().getFirst().ecoPuntos());
+        assertFalse(ranking.gruposDisponibles());
+        verify(afiliaciones).listarRanking(5L);
+    }
+
+    @Test void rankingRechazaAdministradoresDeOtraInstitucion() {
+        when(instituciones.existsById(5L)).thenReturn(true);
+        assertEquals(HttpStatus.FORBIDDEN, assertThrows(ResponseStatusException.class,
+                () -> servicio.consultarRanking(22L, 5L)).getStatusCode());
+        verify(afiliaciones, never()).listarRanking(any());
+    }
+
+    @Test void rankingVacioInformaYConsultaSoloMiembrosVisibles() throws Exception {
+        when(instituciones.existsById(5L)).thenReturn(true);
+        when(afiliaciones.existsByUsuario_IdAndInstitucion_IdAndRol(
+                22L, 5L, RolInstitucional.ADMIN_INSTITUCIONAL)).thenReturn(true);
+        var ranking = servicio.consultarRanking(22L, 5L);
+        assertTrue(ranking.participantes().isEmpty());
+        assertNull(ranking.miPosicion());
+        assertNotNull(ranking.mensaje());
+        String consulta = UsuarioInstitucionRepository.class.getMethod("listarRanking", Long.class)
+                .getAnnotation(org.springframework.data.jpa.repository.Query.class).value();
+        assertTrue(consulta.contains("ui.institucion.id = :institucionId"));
+        assertTrue(consulta.contains("u.visibilidadComunidad = true"));
+        assertTrue(consulta.contains("u.ecoPuntos desc, u.id asc"));
+        assertFalse(consulta.contains("correo"));
     }
 
     @Test

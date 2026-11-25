@@ -37,6 +37,14 @@ public final class CalculoSeguimientoColectivo {
     }
 
     public static String estadoCampana(Datos datos, LocalDate hoy) {
+        return estadoCampana(datos, null, hoy);
+    }
+
+    public static String estadoCampana(Datos datos, Cierre cierre, LocalDate hoy) {
+        if (cierre != null && cierre.fecha() != null
+                && ("EXITOSO".equals(cierre.estado()) || "NO_ALCANZADO".equals(cierre.estado()))) {
+            return "FINALIZADA";
+        }
         if (datos.inicio() == null || datos.fin() == null || datos.fin().isBefore(datos.inicio())) {
             return "DATOS_INCOMPLETOS";
         }

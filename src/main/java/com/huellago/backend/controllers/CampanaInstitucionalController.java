@@ -1,5 +1,9 @@
 package com.huellago.backend.controllers;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import com.huellago.backend.dtos.*;
 import com.huellago.backend.security.UserSecurity;
 import com.huellago.backend.services.CampanaInstitucionalService;
@@ -17,13 +21,15 @@ import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
+@Tag(name = "Campañas institucionales", description = "Requiere pertenencia a la institución; la creación requiere administrador.")
+@SecurityRequirement(name = "bearerAuth")
 @RestController
-@CrossOrigin("*")
 public class CampanaInstitucionalController {
     private final CampanaInstitucionalService servicio;
 
     public CampanaInstitucionalController(CampanaInstitucionalService servicio) { this.servicio = servicio; }
 
+    @Operation(summary = "Crear una campaña institucional", description = "Crear una campaña institucional. Requiere pertenencia a la institución; la creación requiere administrador.")
     @PostMapping("/instituciones/{institucionId}/campanas")
     public ResponseEntity<CampanaRespuestaDTO> crear(@PathVariable Long institucionId,
             @AuthenticationPrincipal UserSecurity usuario, @Valid @RequestBody CampanaCrearDTO datos) {
@@ -32,6 +38,7 @@ public class CampanaInstitucionalController {
                 .body(respuesta);
     }
 
+    @Operation(summary = "Listar campañas de una institución", description = "Listar campañas de una institución. Requiere pertenencia a la institución; la creación requiere administrador.")
     @GetMapping("/instituciones/{institucionId}/campanas")
     public List<CampanaRespuestaDTO> listar(@PathVariable Long institucionId,
             @AuthenticationPrincipal UserSecurity usuario, @RequestParam(defaultValue = "0") int pagina,
@@ -39,12 +46,14 @@ public class CampanaInstitucionalController {
         return servicio.listar(institucionId, usuario.getUser(), pagina, tamano);
     }
 
+    @Operation(summary = "Consultar una campaña institucional", description = "Consultar una campaña institucional. Requiere pertenencia a la institución; la creación requiere administrador.")
     @GetMapping("/instituciones/{institucionId}/campanas/{campanaId}")
     public CampanaRespuestaDTO detalle(@PathVariable Long institucionId, @PathVariable Integer campanaId,
             @AuthenticationPrincipal UserSecurity usuario) {
         return servicio.detalle(institucionId, campanaId, usuario.getUser());
     }
 
+    @Operation(summary = "Listar mis campañas institucionales", description = "Listar mis campañas institucionales. Requiere pertenencia a la institución; la creación requiere administrador.")
     @GetMapping("/usuarios/me/campanas")
     public List<CampanaRespuestaDTO> propias(@AuthenticationPrincipal UserSecurity usuario,
             @RequestParam(defaultValue = "0") int pagina, @RequestParam(defaultValue = "20") int tamano) {

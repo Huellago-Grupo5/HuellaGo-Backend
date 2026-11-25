@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.huellago.backend.serviceimpl.PersistenciaRecomendacionesIAPostgresIntegrationTest
+-------------------------------------------------------------------------------
+Tests run: 15, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 46.08 s -- in com.huellago.backend.serviceimpl.PersistenciaRecomendacionesIAPostgresIntegrationTest
