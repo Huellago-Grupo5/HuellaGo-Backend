@@ -1,31 +1,33 @@
 package com.huellago.backend.controllers;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import com.huellago.backend.dtos.UsuarioRegistroDTO;
 import com.huellago.backend.dtos.UsuarioRespuestaDTO;
 import com.huellago.backend.dtos.LoginDTO;
 import com.huellago.backend.dtos.TokenDTO;
+import com.huellago.backend.dtos.RecuperacionRespuestaDTO;
 import com.huellago.backend.dtos.RecuperarContrasenaDTO;
 import com.huellago.backend.dtos.RestablecerContrasenaDTO;
+import com.huellago.backend.dtos.UsuarioPerfilDTO;
 import com.huellago.backend.services.UsuarioService;
-import com.huellago.backend.services.SesionService;
-import com.huellago.backend.security.JwtUtilService;
+import com.huellago.backend.services.AccesoCuentaService;
 import com.huellago.backend.security.UserSecurity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import jakarta.validation.Valid;
 
+@Tag(name = "Autenticación", description = "Registro, inicio de sesión y recuperación de contraseña. El perfil exige JWT.")
 @RestController
-@CrossOrigin("*")
 @RequestMapping("/auth")
 public class UsuarioController {
 
@@ -33,55 +35,52 @@ public class UsuarioController {
     UsuarioService usuarioService;
 
     @Autowired
-    AuthenticationManager authenticationManager;
+    AccesoCuentaService accesoCuentaService;
 
-    @Autowired
-    JwtUtilService jwtUtilService;
-
-    @Autowired
-    UserDetailsService userDetailsService;
-
-    @Autowired
-    SesionService sesionService;
-
+    @Operation(summary = "Registrar usuario", description = "Registrar usuario. Registro, inicio de sesión y recuperación de contraseña. El perfil exige JWT.")
     @PostMapping("/register")
-    public ResponseEntity<UsuarioRespuestaDTO> registrar(@RequestBody UsuarioRegistroDTO usuarioRegistroDTO) {
+    public ResponseEntity<UsuarioRespuestaDTO> registrar(@Valid @RequestBody UsuarioRegistroDTO usuarioRegistroDTO) {
         return new ResponseEntity<>(usuarioService.registrar(usuarioRegistroDTO), HttpStatus.CREATED);
     }
 
+    @Operation(summary = "Iniciar sesión y obtener JWT", description = "Iniciar sesión y obtener JWT. Registro, inicio de sesión y recuperación de contraseña. El perfil exige JWT.")
     @PostMapping("/login")
-    public ResponseEntity<TokenDTO> login(@RequestBody LoginDTO loginDTO) {
-        try {
-            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(
-                    loginDTO.getCorreo(), loginDTO.getContrasena()));
-        } catch (BadCredentialsException exception) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales inválidas");
-        }
-
-        UserSecurity userSecurity = (UserSecurity) userDetailsService
-                .loadUserByUsername(loginDTO.getCorreo());
-        String token = jwtUtilService.generateToken(userSecurity);
-        sesionService.registrarSesion(userSecurity, token);
-        TokenDTO tokenDTO = new TokenDTO(
-                token,
-                userSecurity.getUser().getId(),
-                userSecurity.getUsername()
-        );
-        return new ResponseEntity<>(tokenDTO, HttpStatus.OK);
+    public ResponseEntity<TokenDTO> login(@Valid @RequestBody LoginDTO loginDTO) {
+        return ResponseEntity.ok(accesoCuentaService.login(loginDTO));
     }
 
+    @Operation(summary = "Solicitar recuperación de contraseña", description = "Devuelve una respuesta informativa equivalente para cuentas existentes e inexistentes. Si hay cuenta y SMTP configurado, envía un enlace de un solo uso y 15 minutos; no expone el token en JSON.")
     @PostMapping("/recuperar-contrasena")
-    public ResponseEntity<TokenDTO> recuperarContrasena(
-            @RequestBody RecuperarContrasenaDTO recuperarContrasenaDTO) {
+    public ResponseEntity<RecuperacionRespuestaDTO> recuperarContrasena(
+            @Valid @RequestBody RecuperarContrasenaDTO recuperarContrasenaDTO) {
         return new ResponseEntity<>(
                 usuarioService.solicitarRecuperacion(recuperarContrasenaDTO), HttpStatus.OK);
     }
 
+    @Operation(summary = "Restablecer contraseña con token", description = "Restablecer contraseña con token. Registro, inicio de sesión y recuperación de contraseña. El perfil exige JWT.")
     @PostMapping("/restablecer-contrasena")
     public ResponseEntity<Void> restablecerContrasena(
-            @RequestBody RestablecerContrasenaDTO restablecerContrasenaDTO) {
+            @Valid @RequestBody RestablecerContrasenaDTO restablecerContrasenaDTO) {
         usuarioService.restablecerContrasena(restablecerContrasenaDTO);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @Operation(summary = "Actualizar perfil autenticado", description = "Actualizar perfil autenticado. Registro, inicio de sesión y recuperación de contraseña. El perfil exige JWT.")
+    @SecurityRequirement(name = "bearerAuth")
+    @PutMapping("/perfil")
+    public ResponseEntity<UsuarioRespuestaDTO> actualizarPerfil(
+            @Valid @RequestBody UsuarioPerfilDTO usuarioPerfilDTO,
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        String correoAnterior = userSecurity.getUsername();
+        UsuarioRespuestaDTO usuarioActualizado = usuarioService.actualizarPerfil(
+                correoAnterior, usuarioPerfilDTO);
+        boolean requiereReautenticacion = !correoAnterior.equalsIgnoreCase(
+                usuarioActualizado.getCorreo());
+
+        return ResponseEntity.ok()
+                .header("X-Reauthentication-Required",
+                        Boolean.toString(requiereReautenticacion))
+                .body(usuarioActualizado);
     }
 
 }

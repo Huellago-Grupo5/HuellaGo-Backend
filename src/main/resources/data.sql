@@ -38,6 +38,14 @@ INSERT INTO insignias (nombre, descripcion, imagen_url, puntos_requeridos)
 SELECT 'Maestro sostenible', 'Alcanzaste 500 eco-puntos.', '/img/maestro-sostenible.png', 500
 WHERE NOT EXISTS (SELECT 1 FROM insignias WHERE nombre = 'Maestro sostenible');
 
+INSERT INTO insignias (nombre, descripcion, imagen_url, puntos_requeridos)
+SELECT 'Reto de transporte completado', 'Completaste un reto individual de Transporte.', '/img/reto-transporte-completado.png', NULL
+WHERE NOT EXISTS (SELECT 1 FROM insignias WHERE nombre = 'Reto de transporte completado');
+
+INSERT INTO insignias (nombre, descripcion, imagen_url, puntos_requeridos)
+SELECT 'Reto de energía completado', 'Completaste un reto individual de Energía.', '/img/reto-energia-completado.png', NULL
+WHERE NOT EXISTS (SELECT 1 FROM insignias WHERE nombre = 'Reto de energía completado');
+
 INSERT INTO retos (titulo, descripcion, dificultad, fecha_inicio, fecha_fin, puntos_recompensa, activo, categoria_id)
 SELECT 'Reto transporte sostenible', 'Usa bicicleta o camina durante una semana para reducir tu huella de carbono.',
        'Media', DATE '2026-10-04', DATE '2026-10-11', 100, TRUE, c.id
@@ -87,3 +95,13 @@ WHERE NOT EXISTS (
       AND h.categoria_id = c.id
       AND h.nombre = datos.nombre
 );
+
+INSERT INTO objetivos_ambientales (nombre, descripcion)
+SELECT datos.nombre, datos.descripcion
+FROM (VALUES
+    ('Reducir emisiones del transporte', 'Usar medios de transporte con menor impacto ambiental.'),
+    ('Ahorrar energia', 'Reducir el consumo de energia en el hogar.'),
+    ('Mejorar mi alimentacion', 'Elegir alimentos con menor huella ambiental.'),
+    ('Reducir y reciclar residuos', 'Disminuir la generacion de residuos y reciclar correctamente.')
+) AS datos(nombre, descripcion)
+WHERE NOT EXISTS (SELECT 1 FROM objetivos_ambientales o WHERE o.nombre = datos.nombre);

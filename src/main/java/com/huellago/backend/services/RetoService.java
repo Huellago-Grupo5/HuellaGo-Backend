@@ -9,6 +9,7 @@ import java.util.List;
 
 public interface RetoService {
     List<RetoRespuestaDTO> listarRetosActivos();
+    List<RetoRespuestaDTO> listarRetosDisponibles(Long usuarioId, String clasificacion);
     UsuarioRetoRespuestaDTO aceptarReto(Integer retoId, Usuario usuario);
     List<UsuarioRetoRespuestaDTO> listarRetosActivos(Long usuarioId);
     UsuarioRetoRespuestaDTO actualizarProgreso(Integer usuarioRetoId, Long usuarioId,

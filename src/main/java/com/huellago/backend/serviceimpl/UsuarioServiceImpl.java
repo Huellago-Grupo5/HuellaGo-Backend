@@ -9,30 +9,31 @@ import com.huellago.backend.dtos.UsuarioPerfilDTO;
 import com.huellago.backend.dtos.EcoPuntosAccionDTO;
 import com.huellago.backend.dtos.EcoPuntosRespuestaDTO;
 import com.huellago.backend.dtos.NivelRespuestaDTO;
+import com.huellago.backend.dtos.PreferenciaNotificacionActualizarDTO;
+import com.huellago.backend.dtos.PreferenciaNotificacionDTO;
+import com.huellago.backend.dtos.PrivacidadActualizarDTO;
+import com.huellago.backend.dtos.PrivacidadDTO;
+import com.huellago.backend.dtos.RankingComunitarioDTO;
 import com.huellago.backend.entities.Usuario;
+import com.huellago.backend.entities.Sesion;
+import com.huellago.backend.repositories.SesionRepository;
 import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.security.JwtUtilService;
 import com.huellago.backend.security.UserSecurity;
-import com.huellago.backend.services.InsigniaService;
 import com.huellago.backend.services.UsuarioService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.Locale;
-import java.util.Map;
+import java.util.List;
 
 @Service
 public class UsuarioServiceImpl implements UsuarioService {
-
-    private static final Map<String, Integer> PUNTOS_ACCIONES = Map.of(
-            "RECICLAR", 10,
-            "USAR_BICICLETA", 15,
-            "AHORRAR_ENERGIA", 10
-    );
 
     @Autowired
     UsuarioRepository usuarioRepository;
@@ -41,12 +42,28 @@ public class UsuarioServiceImpl implements UsuarioService {
     JwtUtilService jwtUtilService;
 
     @Autowired
-    InsigniaService insigniaService;
+    SesionRepository sesionRepository;
+
+    @Autowired
+    com.huellago.backend.services.RecuperacionContrasenaService recuperacionContrasenaService;
+
+    @jakarta.persistence.PersistenceContext
+    jakarta.persistence.EntityManager entityManager;
+
+    @Autowired
+    com.huellago.backend.repositories.RecuperacionContrasenaRepository recuperaciones;
 
 
     @Override
+    @Transactional
     public UsuarioRespuestaDTO registrar(UsuarioRegistroDTO usuarioRegistroDTO) {
-        if (usuarioRepository.existsByCorreo(usuarioRegistroDTO.getCorreo())) {
+        if (usuarioRegistroDTO != null) {
+            usuarioRegistroDTO.setNombres(usuarioRegistroDTO.getNombres());
+            usuarioRegistroDTO.setApellidos(usuarioRegistroDTO.getApellidos());
+            usuarioRegistroDTO.setCorreo(usuarioRegistroDTO.getCorreo());
+        }
+        com.huellago.backend.security.ValidacionCuenta.exigir(usuarioRegistroDTO);
+        if (usuarioRepository.existeCorreoNormalizado(usuarioRegistroDTO.getCorreo())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya está registrado");
         }
 
@@ -63,7 +80,11 @@ public class UsuarioServiceImpl implements UsuarioService {
         usuario.setFechaCreacion(ahora);
         usuario.setFechaActualizacion(ahora);
 
-        Usuario usuarioGuardado = usuarioRepository.save(usuario);
+        Usuario usuarioGuardado;
+        try { usuarioGuardado = usuarioRepository.saveAndFlush(usuario); }
+        catch (org.springframework.dao.DataIntegrityViolationException error) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya está registrado");
+        }
         return new UsuarioRespuestaDTO(
                 usuarioGuardado.getId(),
                 usuarioGuardado.getNombres(),
@@ -80,65 +101,68 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Override
     public Usuario buscarPorCorreo(String correo) {
-        return usuarioRepository.findByCorreo(correo);
+        return usuarioRepository.findByCorreo(com.huellago.backend.security.ValidacionCuenta.correo(correo));
     }
 
     @Override
-    public TokenDTO solicitarRecuperacion(RecuperarContrasenaDTO dto) {
-        Usuario usuario = buscarPorCorreo(dto.getCorreo());
-        if (usuario == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
-        }
-
-        UserSecurity userSecurity = new UserSecurity(usuario);
-        return new TokenDTO(
-                jwtUtilService.generatePasswordResetToken(userSecurity),
-                usuario.getId(),
-                usuario.getCorreo()
-        );
+    public com.huellago.backend.dtos.RecuperacionRespuestaDTO solicitarRecuperacion(RecuperarContrasenaDTO dto) {
+        return recuperacionContrasenaService.solicitar(dto);
     }
 
     @Override
     public void restablecerContrasena(RestablecerContrasenaDTO dto) {
-        if (!jwtUtilService.isPasswordResetToken(dto.getToken())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token de recuperación inválido");
-        }
-
-        String correo = jwtUtilService.extractUsername(dto.getToken());
-        Usuario usuario = buscarPorCorreo(correo);
-        if (usuario == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
-        }
-
-        usuario.setContrasena(new BCryptPasswordEncoder().encode(dto.getNuevaContrasena()));
-        usuario.setFechaActualizacion(LocalDateTime.now());
-        usuarioRepository.save(usuario);
+        recuperacionContrasenaService.restablecer(dto);
     }
 
     @Override
+    @Transactional
     public UsuarioRespuestaDTO actualizarPerfil(String correoAutenticado, UsuarioPerfilDTO dto) {
+        if (dto != null) {
+            dto.setNombres(dto.getNombres()); dto.setApellidos(dto.getApellidos()); dto.setCorreo(dto.getCorreo());
+        }
+        com.huellago.backend.security.ValidacionCuenta.exigir(dto);
         Usuario usuario = buscarPorCorreo(correoAutenticado);
         if (usuario == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado");
         }
 
-        if (dto.getCorreo() != null && !dto.getCorreo().equalsIgnoreCase(usuario.getCorreo())
-                && usuarioRepository.existsByCorreoAndIdNot(dto.getCorreo(), usuario.getId())) {
+        usuarioRepository.bloquearParaRecomendaciones(usuario.getId()).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+        entityManager.refresh(usuario);
+        if (!com.huellago.backend.security.ValidacionCuenta.correo(correoAutenticado)
+                .equals(com.huellago.backend.security.ValidacionCuenta.correo(usuario.getCorreo()))) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Debe iniciar sesión nuevamente");
+        }
+
+        String nombres = dto.getNombres().trim();
+        String apellidos = dto.getApellidos().trim();
+        String correo = dto.getCorreo().trim().toLowerCase(Locale.ROOT);
+        boolean cambioCorreo = !correo.equalsIgnoreCase(usuario.getCorreo());
+
+        if (cambioCorreo
+                && usuarioRepository.existsByCorreoIgnoreCaseAndIdNot(correo, usuario.getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya está registrado");
         }
 
-        if (dto.getNombres() != null) {
-            usuario.setNombres(dto.getNombres());
-        }
-        if (dto.getApellidos() != null) {
-            usuario.setApellidos(dto.getApellidos());
-        }
-        if (dto.getCorreo() != null) {
-            usuario.setCorreo(dto.getCorreo());
-        }
+        usuario.setNombres(nombres);
+        usuario.setApellidos(apellidos);
+        usuario.setCorreo(correo);
         usuario.setFechaActualizacion(LocalDateTime.now());
 
-        Usuario usuarioActualizado = usuarioRepository.save(usuario);
+        Usuario usuarioActualizado;
+        try {
+            usuarioActualizado = usuarioRepository.save(usuario);
+            usuarioRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException error) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "El correo ya está registrado");
+        }
+        if (cambioCorreo) {
+            recuperaciones.eliminarDelUsuario(usuario.getId());
+            List<Sesion> sesionesActivas = sesionRepository
+                    .findByUsuario_IdAndActivaTrue(usuario.getId());
+            sesionesActivas.forEach(sesion -> sesion.setActiva(false));
+            sesionRepository.saveAll(sesionesActivas);
+        }
         return new UsuarioRespuestaDTO(
                 usuarioActualizado.getId(),
                 usuarioActualizado.getNombres(),
@@ -160,25 +184,9 @@ public class UsuarioServiceImpl implements UsuarioService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "La acción es obligatoria");
         }
-
-        String accion = dto.getAccion().trim().toUpperCase(Locale.ROOT);
-        Integer puntos = PUNTOS_ACCIONES.get(accion);
-        if (puntos == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Acción sostenible no válida");
-        }
-
-        int ecoPuntosActuales = usuario.getEcoPuntos() == null ? 0 : usuario.getEcoPuntos();
-        usuario.setEcoPuntos(ecoPuntosActuales + puntos);
-        Usuario usuarioActualizado = actualizarNivel(usuario);
-        insigniaService.evaluarYDesbloquearInsignias(usuarioActualizado);
-
-        return new EcoPuntosRespuestaDTO(
-                usuarioActualizado.getId(),
-                usuarioActualizado.getEcoPuntos(),
-                puntos,
-                accion
-        );
+        // No existe evidencia persistida ni una regla de validación para acciones autodeclaradas.
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "No se pueden otorgar eco-puntos por acciones sin verificación");
     }
 
     @Override
@@ -200,6 +208,86 @@ public class UsuarioServiceImpl implements UsuarioService {
                 100 - puntosEnNivel,
                 puntosEnNivel
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PreferenciaNotificacionDTO obtenerPreferenciaNotificaciones(
+            Usuario usuarioAutenticado) {
+        Usuario usuario = obtenerUsuarioActual(usuarioAutenticado);
+        return mapearPreferencia(usuario);
+    }
+
+    @Override
+    @Transactional
+    public PreferenciaNotificacionDTO actualizarPreferenciaNotificaciones(
+            Usuario usuarioAutenticado, PreferenciaNotificacionActualizarDTO dto) {
+        Usuario usuario = obtenerUsuarioActual(usuarioAutenticado);
+        usuario.setNotificacionesActivas(dto.getNotificacionesActivas());
+        usuario.setFechaActualizacion(LocalDateTime.now());
+        return mapearPreferencia(usuarioRepository.save(usuario));
+    }
+
+    private Usuario obtenerUsuarioActual(Usuario usuarioAutenticado) {
+        return usuarioRepository.findById(usuarioAutenticado.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+    }
+
+    private PreferenciaNotificacionDTO mapearPreferencia(Usuario usuario) {
+        return new PreferenciaNotificacionDTO(
+                usuario.getId(),
+                usuario.getNotificacionesActivas(),
+                usuario.getFechaActualizacion()
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PrivacidadDTO obtenerPrivacidad(Usuario usuarioAutenticado) {
+        Usuario usuario = obtenerUsuarioActual(usuarioAutenticado);
+        return mapearPrivacidad(usuario);
+    }
+
+    @Override
+    @Transactional
+    public PrivacidadDTO actualizarPrivacidad(
+            Usuario usuarioAutenticado, PrivacidadActualizarDTO dto) {
+        Usuario usuario = obtenerUsuarioActual(usuarioAutenticado);
+        usuario.setVisibilidadComunidad(dto.getVisibilidadComunidad());
+        usuario.setFechaActualizacion(LocalDateTime.now());
+        return mapearPrivacidad(usuarioRepository.save(usuario));
+    }
+
+    private PrivacidadDTO mapearPrivacidad(Usuario usuario) {
+        return new PrivacidadDTO(
+                usuario.getId(),
+                usuario.getVisibilidadComunidad(),
+                usuario.getFechaActualizacion()
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RankingComunitarioDTO obtenerRankingComunitario(Usuario usuarioAutenticado) {
+        if (usuarioAutenticado == null || usuarioAutenticado.getId() == null)
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Se requiere autenticación");
+
+        var filas = usuarioRepository.listarRankingComunitario();
+        var participantes = new java.util.ArrayList<RankingComunitarioDTO.Participante>(filas.size());
+        Integer miPosicion = null;
+        for (var fila : filas) {
+            int posicion = participantes.size() + 1;
+            String nombre = fila.getNombres();
+            if (nombre == null || nombre.isBlank()) nombre = "Usuario de HuellaGo";
+            participantes.add(new RankingComunitarioDTO.Participante(posicion, nombre.trim(),
+                    fila.getEcoPuntos(), fila.getNivel()));
+            if (usuarioAutenticado.getId().equals(fila.getId())) miPosicion = posicion;
+        }
+        String mensaje = participantes.isEmpty() ? "No hay participantes visibles en el ranking."
+                : participantes.size() == 1 ? "Aún no hay otros participantes visibles para comparar."
+                : null;
+        return new RankingComunitarioDTO(participantes, miPosicion, mensaje);
     }
 
 }

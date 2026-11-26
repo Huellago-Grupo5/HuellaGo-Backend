@@ -3,8 +3,28 @@ package com.huellago.backend.repositories;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import com.huellago.backend.entities.UsuarioRecomendacionIA;
+import java.util.Optional;
+import java.util.List;
+import org.springframework.data.repository.query.Param;
 
 public interface UsuarioRecomendacionIARepository extends JpaRepository<UsuarioRecomendacionIA, Integer> {
+
+    List<UsuarioRecomendacionIA> findByUsuario_IdAndReferenciaContextoAndMetodoGeneracion(
+            Long usuarioId, String referenciaContexto, String metodoGeneracion);
+
+    List<UsuarioRecomendacionIA> findByUsuario_IdAndEstadoIgnoreCaseAndRecomendacionIA_Categoria_Id(
+            Long usuarioId, String estado, Long categoriaId);
+
+    @Query(value = "SELECT id FROM usuarios_recomendaciones_ia WHERE id = :id AND usuario_id = :usuarioId FOR UPDATE", nativeQuery = true)
+    Optional<Integer> bloquearPropia(@Param("id") Integer id, @Param("usuarioId") Long usuarioId);
+
+    Optional<UsuarioRecomendacionIA> findByIdAndUsuario_Id(Integer id, Long usuarioId);
+
+    List<UsuarioRecomendacionIA> findByUsuario_IdAndEstadoIgnoreCaseOrderByFechaCompletadoDescIdDesc(
+            Long usuarioId, String estado);
+
+    Optional<UsuarioRecomendacionIA> findFirstByUsuario_IdAndRecomendacionIA_IdOrderByIdAsc(
+            Long usuarioId, Integer recomendacionId);
 
     @Query("SELECT COUNT(ur) FROM UsuarioRecomendacionIA ur WHERE ur.usuario.id = :usuarioId AND LOWER(ur.estado) = 'pendiente'")
     public Long contarRecomendacionesPendientesUsuario(Long usuarioId);

@@ -12,4 +12,8 @@ import java.math.BigDecimal;
 public class ActividadHuellaDTO {
     private String categoria;
     private BigDecimal co2;
+
+    public boolean isCompleta() {
+        return co2 != null;
+    }
 }

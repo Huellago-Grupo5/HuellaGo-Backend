@@ -26,6 +26,18 @@ public class Reto {
     private LocalDate fechaInicio;
     private LocalDate fechaFin;
     private Boolean activo;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private TipoReto tipo = TipoReto.INDIVIDUAL;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "institucion_id")
+    @ToString.Exclude
+    private Institucion institucion;
+
+    @ManyToOne
+    @JoinColumn(name = "usuario_recomendacion_ia_id", unique = true)
+    private UsuarioRecomendacionIA recomendacionOrigen;
 
     @ManyToOne
     @JoinColumn(name = "categoria_id")

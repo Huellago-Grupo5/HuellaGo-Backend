@@ -22,6 +22,8 @@ public class Usuario {
     private String nombres;
     private String apellidos;
     private String correo;
+    @lombok.ToString.Exclude
+    @JsonIgnore
     private String contrasena;
     private Integer ecoPuntos;
     private Integer nivel;

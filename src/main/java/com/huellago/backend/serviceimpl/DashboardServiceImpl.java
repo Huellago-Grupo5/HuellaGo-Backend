@@ -46,21 +46,35 @@ public class DashboardServiceImpl implements DashboardService {
 
         List<String> categorias = List.of("Transporte", "Energía", "Alimentación", "Residuos");
         Map<String, Long> habitosPorCategoria = new LinkedHashMap<>();
-        for (String categoria : categorias) {
-            habitosPorCategoria.put(categoria,
-                    habitoRepository.contarHabitosUsuarioPorCategoria(usuarioId, categoria));
+        categorias.forEach(categoria -> habitosPorCategoria.put(categoria, 0L));
+        Map<String, String> nombresCanonicos = new LinkedHashMap<>();
+        categorias.forEach(categoria -> nombresCanonicos.put(ValidacionHabitosIniciales.normalizar(categoria), categoria));
+        Map<String, Long> conteos = new java.util.TreeMap<>();
+        long total = 0;
+        for (var fila : habitoRepository.contarPorCategoria(usuarioId)) {
+            total += fila.getCantidad();
+            if (fila.getNombre() == null) continue;
+            String normalizado = ValidacionHabitosIniciales.normalizar(fila.getNombre());
+            String nombre = nombresCanonicos.getOrDefault(normalizado, normalizado);
+            conteos.merge(nombre, fila.getCantidad(), Long::sum);
         }
+        categorias.forEach(categoria -> habitosPorCategoria.put(categoria, conteos.getOrDefault(categoria, 0L)));
+        // TreeMap fija el desempate por nombre; agrupa variantes historicas antes de comparar.
+        String dominante = conteos.entrySet().stream()
+                .max(java.util.Comparator.<Map.Entry<String, Long>>comparingLong(Map.Entry::getValue)
+                        .thenComparing(Map.Entry::getKey, java.util.Comparator.reverseOrder()))
+                .map(Map.Entry::getKey).orElse(null);
 
         return new DashboardDTO(
                 usuario.getId(),
                 usuario.getEcoPuntos(),
                 usuario.getNivel(),
-                habitoRepository.contarHabitosUsuario(usuarioId),
+                total,
                 huellaCarbonoRepository.buscarHuellaActual_SQL(usuarioId),
                 usuarioRetoRepository.contarRetosActivosUsuario(usuarioId),
                 usuarioRecomendacionIARepository.contarRecomendacionesPendientesUsuario(usuarioId),
                 habitosPorCategoria,
-                habitoRepository.buscarCategoriaConMasHabitos_SQL(usuarioId),
+                dominante,
                 usuarioRetoRepository.contarRetosCompletadosUsuario_SQL(usuarioId),
                 usuarioRecomendacionIARepository.contarRecomendacionesCompletadasUsuario_SQL(usuarioId)
         );

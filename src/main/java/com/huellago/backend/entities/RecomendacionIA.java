@@ -31,4 +31,24 @@ public class RecomendacionIA {
     @ToString.Exclude
     @OneToMany(mappedBy = "recomendacionIA", fetch = FetchType.EAGER)
     private List<UsuarioRecomendacionIA> usuariosRecomendacionesIA;
+
+    // Opcionales: las recomendaciones heredadas no reciben identidad IA automáticamente.
+    @Column(name = "accion_id", length = 100, updatable = false)
+    private String accionId;
+
+    @Column(name = "version_accion", length = 30, updatable = false)
+    private String versionAccion;
+
+    /** Conserva la firma del constructor anterior a la identidad IA. */
+    public RecomendacionIA(Integer id, String titulo, String descripcion, String prioridad,
+                           Integer puntosRecompensa, CategoriaHabito categoria,
+                           List<UsuarioRecomendacionIA> usuariosRecomendacionesIA) {
+        this.id = id;
+        this.titulo = titulo;
+        this.descripcion = descripcion;
+        this.prioridad = prioridad;
+        this.puntosRecompensa = puntosRecompensa;
+        this.categoria = categoria;
+        this.usuariosRecomendacionesIA = usuariosRecomendacionesIA;
+    }
 }

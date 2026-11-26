@@ -4,6 +4,8 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
 import javax.crypto.SecretKey;
 import java.util.Base64;
@@ -14,14 +16,29 @@ import java.util.function.Function;
 
 @Service
 public class JwtUtilService {
-    private static final String JWT_SIGNATURE_KEY =
-            "VVBDX0lOR0VOSUVSSUFfU0lTVEVNQVNfREVfSU5GT1JNQUNJT05fVFJBRElOR19CQUNLRU5EX0pXVA==";
+    private String secretoExterno = "";
     private static final Long JWT_TOKEN_VALIDITY = 1000 * 60 * 60 * 3L;
-    private static final Long PASSWORD_RESET_TOKEN_VALIDITY = 1000 * 60 * 15L;
+
+    @Autowired
+    public JwtUtilService(@Value("${huellago.jwt.secret:}") String secretoExterno) {
+        this.secretoExterno = secretoExterno;
+    }
+
+    public JwtUtilService() { }
+
+    @jakarta.annotation.PostConstruct
+    void verificarConfiguracion() {
+        if (secretoExterno == null || secretoExterno.isBlank()) {
+            throw new IllegalStateException("HUELLAGO_JWT_SECRET debe contener una clave Base64 estable de al menos 256 bits");
+        }
+        getSigningKey();
+    }
 
     private SecretKey getSigningKey() {
-        byte[] decodedKey = Base64.getDecoder().decode(JWT_SIGNATURE_KEY);
-        return Keys.hmacShaKeyFor(decodedKey);
+        if (secretoExterno == null || secretoExterno.isBlank()) {
+            throw new IllegalStateException("HUELLAGO_JWT_SECRET no configurado");
+        }
+        return Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretoExterno));
     }
 
     private Claims extractAllClaims(String token) {
@@ -47,7 +64,7 @@ public class JwtUtilService {
     public boolean validateToken(String token, UserSecurity user) {
         return extractPurpose(token) == null
                 && !isTokenExpired(token)
-                && extractUsername(token).equals(user.getUsername());
+                && ValidacionCuenta.correo(extractUsername(token)).equals(ValidacionCuenta.correo(user.getUsername()));
     }
 
     public String extractPurpose(String token) {
@@ -57,6 +74,7 @@ public class JwtUtilService {
     private String createToken(String subject, Map<String, Object> claims) {
         return Jwts.builder()
                 .claims(claims)
+                .id(java.util.UUID.randomUUID().toString())
                 .subject(subject)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + JWT_TOKEN_VALIDITY))
@@ -67,27 +85,7 @@ public class JwtUtilService {
     public String generateToken(UserSecurity securityUser) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("user_id", securityUser.getUser().getId());
-        return createToken(securityUser.getUsername(), claims);
+        return createToken(ValidacionCuenta.correo(securityUser.getUsername()), claims);
     }
 
-    public String generatePasswordResetToken(UserSecurity securityUser) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("purpose", "PASSWORD_RESET");
-        claims.put("user_id", securityUser.getUser().getId());
-        return Jwts.builder()
-                .claims(claims)
-                .subject(securityUser.getUsername())
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + PASSWORD_RESET_TOKEN_VALIDITY))
-                .signWith(getSigningKey(), Jwts.SIG.HS256)
-                .compact();
-    }
-
-    public boolean isPasswordResetToken(String token) {
-        try {
-            return "PASSWORD_RESET".equals(extractPurpose(token)) && !isTokenExpired(token);
-        } catch (RuntimeException exception) {
-            return false;
-        }
-    }
 }

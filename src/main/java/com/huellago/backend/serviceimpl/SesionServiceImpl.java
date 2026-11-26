@@ -35,10 +35,21 @@ public class SesionServiceImpl implements SesionService {
     }
 
     @Override
-    public void cerrarSesion(String token) {
+    public void cerrarSesion(UserSecurity userSecurity, String token) {
         Sesion sesion = sesionRepository.findByToken(token)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.UNAUTHORIZED, "Sesión no encontrada"));
+        if (sesion.getUsuario() == null
+                || !sesion.getUsuario().getId().equals(userSecurity.getUser().getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED, "La sesi\u00f3n no pertenece al usuario autenticado");
+        }
+        if (!Boolean.TRUE.equals(sesion.getActiva())
+                || sesion.getFechaExpiracion() == null
+                || !sesion.getFechaExpiracion().isAfter(LocalDateTime.now())) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED, "La sesi\u00f3n ya no est\u00e1 activa");
+        }
         sesion.setActiva(false);
         sesionRepository.save(sesion);
     }

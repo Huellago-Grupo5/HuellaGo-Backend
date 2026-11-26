@@ -9,15 +9,27 @@ import com.huellago.backend.dtos.UsuarioPerfilDTO;
 import com.huellago.backend.dtos.EcoPuntosAccionDTO;
 import com.huellago.backend.dtos.EcoPuntosRespuestaDTO;
 import com.huellago.backend.dtos.NivelRespuestaDTO;
+import com.huellago.backend.dtos.PreferenciaNotificacionActualizarDTO;
+import com.huellago.backend.dtos.PreferenciaNotificacionDTO;
+import com.huellago.backend.dtos.PrivacidadActualizarDTO;
+import com.huellago.backend.dtos.PrivacidadDTO;
+import com.huellago.backend.dtos.RankingComunitarioDTO;
 import com.huellago.backend.entities.Usuario;
 
 public interface UsuarioService {
     public UsuarioRespuestaDTO registrar(UsuarioRegistroDTO usuarioRegistroDTO);
     public Usuario buscarPorCorreo(String correo);
-    public TokenDTO solicitarRecuperacion(RecuperarContrasenaDTO recuperarContrasenaDTO);
+    public com.huellago.backend.dtos.RecuperacionRespuestaDTO solicitarRecuperacion(RecuperarContrasenaDTO recuperarContrasenaDTO);
     public void restablecerContrasena(RestablecerContrasenaDTO restablecerContrasenaDTO);
     public UsuarioRespuestaDTO actualizarPerfil(String correoAutenticado, UsuarioPerfilDTO usuarioPerfilDTO);
     public EcoPuntosRespuestaDTO otorgarEcoPuntos(Usuario usuario, EcoPuntosAccionDTO ecoPuntosAccionDTO);
     public Usuario actualizarNivel(Usuario usuario);
     public NivelRespuestaDTO obtenerNivel(Usuario usuario);
+    public PreferenciaNotificacionDTO obtenerPreferenciaNotificaciones(Usuario usuario);
+    public PreferenciaNotificacionDTO actualizarPreferenciaNotificaciones(
+            Usuario usuario, PreferenciaNotificacionActualizarDTO dto);
+    public PrivacidadDTO obtenerPrivacidad(Usuario usuario);
+    public PrivacidadDTO actualizarPrivacidad(
+            Usuario usuario, PrivacidadActualizarDTO dto);
+    RankingComunitarioDTO obtenerRankingComunitario(Usuario usuarioAutenticado);
 }

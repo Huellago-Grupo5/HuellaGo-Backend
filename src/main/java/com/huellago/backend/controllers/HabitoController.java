@@ -1,5 +1,9 @@
 package com.huellago.backend.controllers;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+
 import com.huellago.backend.dtos.AlimentacionResiduosDTO;
 import com.huellago.backend.dtos.AlimentacionResiduosRespuestaDTO;
 import com.huellago.backend.dtos.EnergiaDTO;
@@ -14,7 +18,6 @@ import com.huellago.backend.security.UsuarioAuthorizationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,8 +26,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
+@Tag(name = "Hábitos", description = "Registra y consulta hábitos del usuario autenticado; los cambios pueden actualizar su huella y recomendaciones.")
+@SecurityRequirement(name = "bearerAuth")
 @RestController
-@CrossOrigin("*")
 @RequestMapping("/habitos")
 public class HabitoController {
 
@@ -34,25 +38,35 @@ public class HabitoController {
     @Autowired
     UsuarioAuthorizationService usuarioAuthorizationService;
 
+    @Operation(summary = "Consultar mis hábitos", description = "Consultar mis hábitos. Registra y consulta hábitos del usuario autenticado; los cambios pueden actualizar su huella y recomendaciones.")
+    @org.springframework.web.bind.annotation.GetMapping
+    public ResponseEntity<java.util.List<HabitoRespuestaDTO>> listar(
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(habitoService.listar(userSecurity.getUser()));
+    }
+
+    @Operation(summary = "Registrar hábito de transporte", description = "Registrar hábito de transporte. Registra y consulta hábitos del usuario autenticado; los cambios pueden actualizar su huella y recomendaciones.")
     @PostMapping("/transporte")
     public ResponseEntity<TransporteRespuestaDTO> registrarTransporte(
-            @RequestBody TransporteDTO transporteDTO,
+            @jakarta.validation.Valid @RequestBody TransporteDTO transporteDTO,
             @AuthenticationPrincipal UserSecurity userSecurity) {
         usuarioAuthorizationService.validarPropietario(transporteDTO.getUsuarioId(), userSecurity);
         return new ResponseEntity<>(habitoService.registrarTransporte(transporteDTO), HttpStatus.CREATED);
     }
 
+    @Operation(summary = "Registrar hábito de energía", description = "Registrar hábito de energía. Registra y consulta hábitos del usuario autenticado; los cambios pueden actualizar su huella y recomendaciones.")
     @PostMapping("/energia")
     public ResponseEntity<EnergiaRespuestaDTO> registrarEnergia(
-            @RequestBody EnergiaDTO energiaDTO,
+            @jakarta.validation.Valid @RequestBody EnergiaDTO energiaDTO,
             @AuthenticationPrincipal UserSecurity userSecurity) {
         usuarioAuthorizationService.validarPropietario(energiaDTO.getUsuarioId(), userSecurity);
         return new ResponseEntity<>(habitoService.registrarEnergia(energiaDTO), HttpStatus.CREATED);
     }
 
+    @Operation(summary = "Registrar hábitos de alimentación y residuos", description = "Registrar hábitos de alimentación y residuos. Registra y consulta hábitos del usuario autenticado; los cambios pueden actualizar su huella y recomendaciones.")
     @PostMapping("/alimentacion-residuos")
     public ResponseEntity<AlimentacionResiduosRespuestaDTO> registrarAlimentacionResiduos(
-            @RequestBody AlimentacionResiduosDTO dto,
+            @jakarta.validation.Valid @RequestBody AlimentacionResiduosDTO dto,
             @AuthenticationPrincipal UserSecurity userSecurity) {
         usuarioAuthorizationService.validarPropietario(dto.getUsuarioId(), userSecurity);
         return new ResponseEntity<>(
@@ -61,6 +75,7 @@ public class HabitoController {
         );
     }
 
+    @Operation(summary = "Actualizar hábito propio", description = "Actualizar hábito propio. Registra y consulta hábitos del usuario autenticado; los cambios pueden actualizar su huella y recomendaciones.")
     @PutMapping("/{id}")
     public ResponseEntity<HabitoRespuestaDTO> actualizar(
             @PathVariable Long id,
