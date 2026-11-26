@@ -6,6 +6,9 @@ import com.huellago.backend.repositories.SesionRepository;
 import com.huellago.backend.security.*;
 import com.huellago.backend.services.AccesoCuentaService;
 import com.huellago.backend.services.*;
+import com.huellago.backend.config.InternacionalizacionConfiguration;
+import com.huellago.backend.config.TextoLocalizado;
+import com.huellago.backend.config.RespuestaLocalizadaAdvice;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -27,7 +30,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 
 @WebMvcTest({UsuarioController.class,UsuarioPerfilController.class})
-@Import({SecurityConfiguration.class,JwtRequestFilter.class,CuentaErrorHandler.class})
+@Import({SecurityConfiguration.class,JwtRequestFilter.class,CuentaErrorHandler.class,
+        InternacionalizacionConfiguration.class,TextoLocalizado.class,RespuestaLocalizadaAdvice.class})
 @ImportAutoConfiguration({SecurityAutoConfiguration.class,ServletWebSecurityAutoConfiguration.class,SecurityFilterAutoConfiguration.class})
 class CuentaControllerTest {
     @Autowired MockMvc mvc;
@@ -134,5 +138,74 @@ class CuentaControllerTest {
         mvc.perform(post("/auth/recuperar-contrasena").contentType("application/json").content("{\"correo\":\"cuenta@example.invalid\"}"))
                 .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.token").doesNotExist())
                 .andExpect(jsonPath("$.mensaje").value("La recuperación por correo no está disponible; no se confirmó ningún envío"));
+    }
+    @Test void idiomaDeValidacionYCredencialesSigueAcceptLanguage() throws Exception {
+        mvc.perform(post("/auth/login").header("Accept-Language", "en-US")
+                .contentType("application/json").content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensaje").value("Invalid account data"))
+                .andExpect(jsonPath("$.errores", org.hamcrest.Matchers.hasItem(
+                        org.hamcrest.Matchers.containsString("Email is required"))));
+        mvc.perform(post("/auth/login").header("Accept-Language", "es-419")
+                .contentType("application/json").content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensaje").value("Datos de cuenta inválidos"));
+        when(acceso.login(any())).thenThrow(new org.springframework.security.authentication.BadCredentialsException("privado"));
+        mvc.perform(post("/auth/login").header("Accept-Language", "en")
+                .contentType("application/json").content("{\"correo\":\"x@example.invalid\",\"contrasena\":\"incorrecta\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.mensaje").value("Invalid credentials"));
+    }
+
+    @Test void idiomaNoSoportadoYPreferenciasResuelvenSinCambiarContrato() throws Exception {
+        for (String idioma : new String[]{"fr-FR", "es", "fr-FR, es-419;q=0.8"}) {
+            mvc.perform(post("/auth/login").header("Accept-Language", idioma)
+                    .contentType("application/json").content("{}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.mensaje").value("Datos de cuenta inválidos"));
+        }
+        mvc.perform(post("/auth/login").contentType("application/json").content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensaje").value("Datos de cuenta inválidos"));
+        mvc.perform(post("/auth/login").header("Accept-Language", "fr-FR, en-US;q=0.8")
+                .contentType("application/json").content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensaje").value("Invalid account data"));
+    }
+
+    @Test void jwtAusenteMantiene401SinBodyYExponeIdiomaEnCabecera() throws Exception {
+        mvc.perform(put("/usuarios/perfil").header("Accept-Language", "en-US")
+                .contentType("application/json").content(perfil))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().string(""))
+                .andExpect(header().string("Content-Language", "en-US"))
+                .andExpect(header().string("WWW-Authenticate", org.hamcrest.Matchers.containsString("Authentication required")));
+    }
+
+    @Test void recuperacionInglesNoRevelaExistenciaNiToken() throws Exception {
+        when(usuarios.solicitarRecuperacion(any())).thenReturn(new RecuperacionRespuestaDTO(
+                "Si la cuenta existe, se enviara un enlace de recuperacion al correo registrado"));
+        mvc.perform(post("/auth/recuperar-contrasena").header("Accept-Language", "en-US")
+                .contentType("application/json").content("{\"correo\":\"x@example.invalid\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mensaje").value("If the account exists, a recovery link will be sent to its registered email address"))
+                .andExpect(jsonPath("$.token").doesNotExist());
+    }
+    @Test void accesoDenegadoSeLocalizaSinExponerDetalle() throws Exception {
+        when(usuarios.actualizarPerfil(anyString(), any())).thenThrow(
+                new org.springframework.security.access.AccessDeniedException("detalle privado"));
+        mvc.perform(put("/usuarios/perfil").with(authentication(identidad()))
+                .header("Accept-Language", "en-US").contentType("application/json").content(perfil))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value("Access denied"));
+    }
+    @Test void corsPermiteCabeceraDeIdiomaDesdeAngularLocal() throws Exception {
+        mvc.perform(options("/auth/login").header("Origin", "http://localhost:4200")
+                .header("Access-Control-Request-Method", "POST")
+                .header("Access-Control-Request-Headers", "content-type,accept-language"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:4200"))
+                .andExpect(header().string("Access-Control-Allow-Headers",
+                        org.hamcrest.Matchers.matchesPattern("(?i).*accept-language.*")));
     }
 }

@@ -39,6 +39,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/usuarios/me/recomendaciones")
 public class RecomendacionController {
 
+    /** Esquema documental del cuerpo de error real: {"mensaje":"..."}. */
+    public record ErrorRespuesta(String mensaje) { }
+
     @Autowired
     RecomendacionService recomendacionService;
     @Autowired(required = false)
@@ -75,6 +78,13 @@ public class RecomendacionController {
     }
 
     @Operation(summary = "Consultar recomendaciones pendientes y escenarios hipotéticos", description = "Consulta sin llamar a Ollama. Puede filtrar por categoría y evaluar escenarios explícitos de cambio de hábitos; las reducciones en kg CO2e semanales son hipotéticas. NO_ESTIMABLE indica que faltan datos suficientes. Prioridad cualitativa y ahorro estimado son conceptos distintos.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Recomendaciones pendientes propias; lista vacía si no hay", useReturnTypeSchema = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Filtro o escenario inválido",
+            content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json",
+                    schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ErrorRespuesta.class)))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Contenido persistido incompleto o no recuperable",
+            content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json",
+                    schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ErrorRespuesta.class)))
     @GetMapping
     public ResponseEntity<List<RecomendacionPersonalizadaDTO>> pendientes(
             @AuthenticationPrincipal UserSecurity userSecurity,

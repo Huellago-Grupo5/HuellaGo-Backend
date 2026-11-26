@@ -103,8 +103,9 @@ public class OllamaConfiguration {
             return new GeneracionManualIAServiceImpl(c,e,o,p,catalogo);
         }
         @Bean EntradaDemostracionRecomendacionesIA entradaIA(GeneracionManualIAService g,UsuarioRecomendacionIARepository a,
-                org.springframework.transaction.PlatformTransactionManager tm) {
-            return new EntradaRecomendacionesIA(g,a,tm);
+                org.springframework.transaction.PlatformTransactionManager tm,
+                org.springframework.beans.factory.ObjectProvider<PresentacionesLocalizadasIA> traducciones) {
+            return new EntradaRecomendacionesIA(g,a,tm,traducciones.getIfAvailable());
         }
     }
 }

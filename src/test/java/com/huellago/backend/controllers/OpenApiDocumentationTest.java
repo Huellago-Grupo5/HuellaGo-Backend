@@ -132,6 +132,8 @@ class OpenApiDocumentationTest {
         JsonNode api = documento();
         assertEquals("http", api.path("components").path("securitySchemes").path("bearerAuth").path("type").asText());
         assertEquals("bearer", api.path("components").path("securitySchemes").path("bearerAuth").path("scheme").asText());
+        assertTrue(api.path("paths").path("/ambiente/calidad-aire").path("get")
+                .path("parameters").toString().contains("Accept-Language"));
         for (String ruta : java.util.List.of("/ambiente/calidad-aire", "/ambiente/puntos-sostenibles")) {
             JsonNode operacion = api.path("paths").path(ruta).path("get");
             assertEquals("bearerAuth", operacion.path("security").get(0).fieldNames().next());
@@ -166,6 +168,11 @@ class OpenApiDocumentationTest {
         assertTrue(api.path("paths").path("/usuarios/me/recomendaciones/{id}/completar")
                 .path("put").path("responses").has("409"));
         JsonNode recomendaciones = api.path("paths").path("/usuarios/me/recomendaciones").path("get");
+        for (String estado : java.util.List.of("400", "500")) {
+            JsonNode error = recomendaciones.path("responses").path(estado)
+                    .path("content").path("application/json").path("schema");
+            assertTrue(error.toString().contains("ErrorRespuesta"), "GET recomendaciones " + estado);
+        }
         assertTrue(recomendaciones.path("parameters").toString().contains("kmAutoEvitadosSemana"));
         assertTrue(recomendaciones.path("parameters").toString().contains("categoria"));
         JsonNode contenidoRecomendaciones = recomendaciones.path("responses").path("200").path("content");

@@ -14,7 +14,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.cors.CorsConfiguration;
@@ -22,6 +21,8 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
+import org.springframework.context.MessageSource;
+import org.springframework.web.servlet.LocaleResolver;
 
 @Configuration
 public class SecurityConfiguration {
@@ -42,7 +43,7 @@ public class SecurityConfiguration {
         CorsConfiguration cors = new CorsConfiguration();
         cors.setAllowedOrigins(origenes);
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        cors.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept-Language"));
         cors.setExposedHeaders(List.of("Content-Disposition", "X-Reauthentication-Required", "Retry-After"));
         UrlBasedCorsConfigurationSource fuente = new UrlBasedCorsConfigurationSource();
         fuente.registerCorsConfiguration("/**", cors);
@@ -60,12 +61,30 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+            MessageSource mensajes, LocaleResolver idiomas) throws Exception {
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
         http.cors(Customizer.withDefaults());
         http.csrf(AbstractHttpConfigurer::disable);
         http.exceptionHandling(exceptions -> exceptions
-                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
+                .authenticationEntryPoint((solicitud, respuesta, error) -> {
+                    var idioma = idiomas.resolveLocale(solicitud);
+                    respuesta.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    respuesta.setHeader("Content-Language", idioma.toLanguageTag());
+                    respuesta.addHeader("Vary", "Accept-Language");
+                    respuesta.setHeader("WWW-Authenticate", "Bearer realm=\"HuellaGo\", error=\"invalid_token\", error_description=\""
+                            + mensajes.getMessage("auth.required", null, "Autenticación requerida", idioma) + "\"");
+                })
+                .accessDeniedHandler((solicitud, respuesta, error) -> {
+                    var idioma = idiomas.resolveLocale(solicitud);
+                    respuesta.setStatus(HttpStatus.FORBIDDEN.value());
+                    respuesta.setCharacterEncoding("UTF-8");
+                    respuesta.setContentType("application/json");
+                    respuesta.setHeader("Content-Language", idioma.toLanguageTag());
+                    respuesta.addHeader("Vary", "Accept-Language");
+                    respuesta.getWriter().write("{\"mensaje\":\""
+                            + mensajes.getMessage("auth.forbidden", null, "Acceso denegado", idioma) + "\"}");
+                }));
         http.authorizeHttpRequests(authorizationRegistry -> authorizationRegistry
                 .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                 .requestMatchers("/auth/register", "/auth/login",

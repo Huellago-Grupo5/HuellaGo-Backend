@@ -10,11 +10,15 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import java.net.URI;
+import com.huellago.backend.config.TextoLocalizado;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class CorreoRecuperacionSmtp implements CorreoRecuperacionService {
     private final ObjectProvider<JavaMailSender> proveedores;
     private final Environment entorno;
+    @Autowired(required = false)
+    private TextoLocalizado textos;
     public CorreoRecuperacionSmtp(ObjectProvider<JavaMailSender> proveedores, Environment entorno) {
         this.proveedores = proveedores; this.entorno = entorno;
     }
@@ -49,10 +53,10 @@ public class CorreoRecuperacionSmtp implements CorreoRecuperacionService {
         SimpleMailMessage mensaje = new SimpleMailMessage();
         mensaje.setFrom(entorno.getRequiredProperty("huellago.recovery.from"));
         mensaje.setTo(destinatario);
-        mensaje.setSubject("Recuperación de contraseña HuellaGo");
-        mensaje.setText("Usa el siguiente enlace en los próximos 15 minutos. Solo puede utilizarse una vez.\n"
+        mensaje.setSubject(localizar("Recuperación de contraseña HuellaGo"));
+        mensaje.setText(localizar("Usa el siguiente enlace en los próximos 15 minutos. Solo puede utilizarse una vez.") + "\n"
                 + entorno.getRequiredProperty("huellago.recovery.reset-url") + "?token=" + token
-                + "\nSi no solicitaste este cambio, ignora este mensaje.");
+                + "\n" + localizar("Si no solicitaste este cambio, ignora este mensaje."));
         try { proveedores.getObject().send(mensaje); }
         catch (RuntimeException error) { throw indisponible(); }
     }
@@ -60,4 +64,5 @@ public class CorreoRecuperacionSmtp implements CorreoRecuperacionService {
         return new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                 "La recuperación por correo no está disponible; no se confirmó ningún envío");
     }
+    private String localizar(String original) { return textos == null ? original : textos.traducir(original); }
 }

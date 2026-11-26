@@ -96,6 +96,20 @@ Las recomendaciones actuales están destinadas al uso universitario local y no c
 
 Para acceder a los endpoints protegidos, iniciar sesión mediante POST /auth/login e introducir el JWT obtenido en la opción Authorize de Swagger.
 
+## Idioma de las respuestas
+
+Envía la cabecera `Accept-Language: es-419` o `Accept-Language: en-US`
+desde Swagger, Postman o Angular. También se aceptan `es` y `en`.
+Sin cabecera o con un idioma no soportado se usa español latinoamericano.
+La cabecera aparece como parámetro opcional en Swagger; no cambia rutas,
+nombres JSON, estados ni códigos. Los datos aportados por usuarios o terceros
+se conservan. Las 30 variantes IA tienen traducciones inglesas controladas por
+identidad y huella. Cambiar el idioma de consulta no vuelve a llamar a Ollama
+ni modifica las instantáneas españolas guardadas. Las traducciones inglesas
+están pendientes de revisión editorial humana y no habilitan `PUBLICABLE`.
+Una recomendación histórica sin identidad y texto original verificables
+conserva su presentación guardada.
+
 ## Datos ambientales externos
 
 Con JWT, `GET /ambiente/calidad-aire?latitud=-12.0464&longitud=-77.0428`

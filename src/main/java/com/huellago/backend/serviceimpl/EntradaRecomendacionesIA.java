@@ -18,9 +18,15 @@ class EntradaRecomendacionesIA implements EntradaDemostracionRecomendacionesIA {
     private final GeneracionManualIAService generacion;
     private final UsuarioRecomendacionIARepository asociaciones;
     private final TransactionTemplate lectura;
+    private final PresentacionesLocalizadasIA traducciones;
     EntradaRecomendacionesIA(GeneracionManualIAService generacion,UsuarioRecomendacionIARepository asociaciones,
             org.springframework.transaction.PlatformTransactionManager tm) {
+        this(generacion, asociaciones, tm, null);
+    }
+    EntradaRecomendacionesIA(GeneracionManualIAService generacion,UsuarioRecomendacionIARepository asociaciones,
+            org.springframework.transaction.PlatformTransactionManager tm, PresentacionesLocalizadasIA traducciones) {
         this.generacion=generacion; this.asociaciones=asociaciones; lectura=new TransactionTemplate(tm); lectura.setReadOnly(true);
+        this.traducciones=traducciones;
     }
     @Override public ResponseEntity<GeneracionRecomendacionesDTO> generar(Authentication a,HttpServletRequest req) {
         try {
@@ -50,6 +56,9 @@ class EntradaRecomendacionesIA implements EntradaDemostracionRecomendacionesIA {
                     item.setVersionAccion(g.versionAccion());
                     if(PrioridadAccionAmbientalIA.BASE.equals(p.getBasePriorizacion()))
                         item.setJustificacionPrioridad(PrioridadAccionAmbientalIA.evaluar(g.accionId(),g.versionAccion()).justificacion());
+                    if (traducciones != null) traducciones.localizar(p).ifPresent(texto -> {
+                        item.setTitulo(texto.titulo()); item.setDescripcion(texto.descripcion()); item.setMotivo(texto.motivo());
+                    });
                     items.add(item);
                     bases.add(p.getBasePriorizacion());
                 }

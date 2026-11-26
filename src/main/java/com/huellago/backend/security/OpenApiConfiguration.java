@@ -5,6 +5,8 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.parameters.Parameter;
+import io.swagger.v3.oas.models.media.StringSchema;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,6 +31,9 @@ public class OpenApiConfiguration {
     public OpenApiCustomizer respuestasHttpDocumentadas() {
         return api -> api.getPaths().forEach((ruta, item) ->
                 item.readOperationsMap().forEach((metodo, operacion) -> {
+                    operacion.addParametersItem(new Parameter().in("header").name("Accept-Language")
+                            .required(false).description("Idioma de los mensajes: es-419 (predeterminado) o en-US; también se aceptan es y en.")
+                            .schema(new StringSchema()._default("es-419")).example("en-US"));
                     var respuestas = operacion.getResponses();
                     if (!ruta.equals("/auth/login") && !ruta.equals("/auth/register")
                             && !ruta.equals("/auth/recuperar-contrasena")

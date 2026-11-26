@@ -25,6 +25,7 @@ import java.util.*;
 
 @Service
 public class RecomendacionServiceImpl implements RecomendacionService {
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(RecomendacionServiceImpl.class);
 
     @Autowired
     UsuarioRepository usuarioRepository;
@@ -50,6 +51,8 @@ public class RecomendacionServiceImpl implements RecomendacionService {
     CatalogoAccionesAmbientalesService catalogoAccionesAmbientalesService;
     @Autowired
     PoliticaMedicionInicial politicaMedicionInicial;
+    @Autowired(required = false)
+    PresentacionesLocalizadasIA traducciones;
 
     @Override
     @Transactional
@@ -164,6 +167,9 @@ public class RecomendacionServiceImpl implements RecomendacionService {
                 dto.setJustificacionPrioridad(PrioridadAccionAmbientalIA.evaluar(
                         recomendacion.getAccionId(), recomendacion.getVersionAccion()).justificacion());
         }
+        if (traducciones != null) traducciones.localizar(asociacion).ifPresent(texto -> {
+            dto.setTitulo(texto.titulo()); dto.setDescripcion(texto.descripcion()); dto.setMotivo(texto.motivo());
+        });
         return dto;
     }
 
@@ -191,6 +197,10 @@ public class RecomendacionServiceImpl implements RecomendacionService {
     private RecomendacionCompletadaDTO completadaDTO(UsuarioRecomendacionIA asociacion) {
         RecomendacionIA recomendacion = asociacion.getRecomendacionIA();
         ContenidoAsociado contenido = contenidoAsociado(asociacion);
+        if (traducciones != null) {
+            var traducido = traducciones.localizar(asociacion);
+            if (traducido.isPresent()) contenido = new ContenidoAsociado(traducido.get().titulo(), traducido.get().descripcion());
+        }
         return new RecomendacionCompletadaDTO(asociacion.getId(),
                 recomendacion == null ? null : recomendacion.getId(),
                 contenido.titulo(), contenido.descripcion(),
@@ -201,28 +211,34 @@ public class RecomendacionServiceImpl implements RecomendacionService {
 
     private ContenidoAsociado contenidoAsociado(UsuarioRecomendacionIA asociacion) {
         RecomendacionIA compartida = asociacion.getRecomendacionIA();
-        // Cualquier metadato nuevo, incluso vacío, impide degradar silenciosamente a legado.
+        // Prioridad, base y huella de origen también las escribe el generador determinista
+        // sin instantáneas de texto. No son una identidad editorial ni contenido personalizado.
+        // Una identidad IA o cualquier parte de la instantánea sí exige los tres textos completos.
         boolean personalizada = compartida != null
                 && (compartida.getAccionId() != null || compartida.getVersionAccion() != null);
-        personalizada = personalizada || metadatosInstantanea(asociacion).anyMatch(Objects::nonNull);
+        personalizada = personalizada || java.util.stream.Stream.of(
+                asociacion.getTituloInstantanea(), asociacion.getDescripcionInstantanea(),
+                asociacion.getMotivoInstantanea(), asociacion.getEnfoque(),
+                asociacion.getVersionPresentacion(), asociacion.getMetodoGeneracion(),
+                asociacion.getReferenciaContexto(), asociacion.getModeloGeneracion()).anyMatch(Objects::nonNull);
         if (!personalizada) return new ContenidoAsociado(
                 compartida == null ? null : compartida.getTitulo(),
                 compartida == null ? null : compartida.getDescripcion());
         if (asociacion.getTituloInstantanea() == null || asociacion.getTituloInstantanea().isBlank()
                 || asociacion.getDescripcionInstantanea() == null || asociacion.getDescripcionInstantanea().isBlank()
                 || asociacion.getMotivoInstantanea() == null || asociacion.getMotivoInstantanea().isBlank()) {
+            LOG.warn("Instantánea de recomendación incompleta: asociacionId={}, accionIdPresente={}, "
+                            + "tituloPresente={}, descripcionPresente={}, motivoPresente={}, metodoPresente={}",
+                    asociacion.getId(), compartida != null && compartida.getAccionId() != null,
+                    asociacion.getTituloInstantanea() != null && !asociacion.getTituloInstantanea().isBlank(),
+                    asociacion.getDescripcionInstantanea() != null && !asociacion.getDescripcionInstantanea().isBlank(),
+                    asociacion.getMotivoInstantanea() != null && !asociacion.getMotivoInstantanea().isBlank(),
+                    asociacion.getMetodoGeneracion() != null);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "No se pudo recuperar el contenido personalizado de la recomendación");
         }
         // Conservar los textos exactos, sin trim, reconstrucción ni modificación de la entidad.
         return new ContenidoAsociado(asociacion.getTituloInstantanea(), asociacion.getDescripcionInstantanea());
-    }
-
-    private java.util.stream.Stream<Object> metadatosInstantanea(UsuarioRecomendacionIA a) {
-        return java.util.stream.Stream.of(a.getTituloInstantanea(), a.getDescripcionInstantanea(),
-                a.getMotivoInstantanea(), a.getEnfoque(), a.getVersionPresentacion(), a.getMetodoGeneracion(),
-                a.getReferenciaContexto(), a.getPrioridadInstantanea(), a.getBasePriorizacion(),
-                a.getHuellaOrigenId(), a.getModeloGeneracion());
     }
 
     @Override

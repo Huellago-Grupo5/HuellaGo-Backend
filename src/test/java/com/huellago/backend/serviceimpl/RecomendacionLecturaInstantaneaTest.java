@@ -63,6 +63,37 @@ class RecomendacionLecturaInstantaneaTest {
         assertEquals(fecha, dto.fechaGeneracion()); assertEquals(a.getFechaCompletado(), dto.fechaCompletado());
         verify(asociaciones, never()).saveAndFlush(any());
     }
+    @Test void deterministaConPrioridadYBaseSinInstantaneaSeConsultaEnAmbosIdiomas() {
+        var categoria = new CategoriaHabito(); categoria.setNombre("Transporte");
+        compartida.setCategoria(categoria);
+        a.setPrioridadInstantanea("ALTA"); a.setBasePriorizacion("HUELLA_REGISTRADA");
+        a.setHuellaOrigenId(12L);
+        servicio.traducciones = new PresentacionesLocalizadasIA();
+        when(asociaciones.findByUsuario_IdAndEstadoIgnoreCaseOrderByFechaCompletadoDescIdDesc(101L, "pendiente"))
+                .thenReturn(List.of(a));
+        for (var idioma : List.of(java.util.Locale.forLanguageTag("es-419"), java.util.Locale.US)) {
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(idioma);
+            var dto = servicio.pendientes(usuario, null).getFirst();
+            assertEquals(3, dto.getUsuarioRecomendacionId());
+            assertEquals(8, dto.getRecomendacionId());
+            assertEquals("Título compartido", dto.getTitulo());
+            assertEquals("Descripción compartida", dto.getDescripcion());
+            assertEquals("ALTA", dto.getPrioridad());
+        }
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        a.setEstado("completado"); a.setFechaCompletado(fecha.plusDays(1)); historial(List.of(a));
+        assertEquals("Título compartido", servicio.historialCompletadas(usuario).getFirst().titulo());
+        verify(asociaciones, never()).save(any()); verify(asociaciones, never()).saveAndFlush(any());
+    }
+    @Test void instantaneaValidaSinVersionEditorialConservaTextosOriginalesEnIngles() {
+        instantanea(); compartida.setVersionAccion(null); a.setVersionPresentacion(null);
+        servicio.traducciones = new PresentacionesLocalizadasIA();
+        a.setEstado("completado"); historial(List.of(a));
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.US);
+        try {
+            assertEquals("  Título personal exacto  ", servicio.historialCompletadas(usuario).getFirst().titulo());
+        } finally { org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext(); }
+    }
     @Test void historialConservaOrdenDevueltoPorRepositorioYTextosExactos() {
         instantanea(); a.setEstado("completado"); a.setFechaCompletado(fecha.plusDays(2));
         var anterior = new UsuarioRecomendacionIA(2, "completado", fecha, fecha.plusDays(1), usuario, compartida);
