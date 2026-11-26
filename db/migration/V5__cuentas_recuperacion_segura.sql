@@ -2,8 +2,8 @@
 -- No modifica usuarios o sesiones existentes. Aborta ante correos incompatibles.
 BEGIN;
 DO $$ BEGIN
-    IF current_database() <> 'huellagodb_hu29_test' THEN
-        RAISE EXCEPTION 'Esta ejecución solo está autorizada en huellagodb_hu29_test';
+    IF current_database() NOT IN ('huellagodb', 'huellagodb_hu29_test') THEN
+        RAISE EXCEPTION 'Esta ejecución solo está autorizada en huellagodb o huellagodb_hu29_test';
     END IF;
 END $$;
 CREATE TABLE IF NOT EXISTS public.recuperaciones_contrasena (

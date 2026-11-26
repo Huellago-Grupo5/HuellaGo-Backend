@@ -46,6 +46,9 @@ build/
 *.keystore
 *.key
 *.pem
+*.secret
+jwt-secret
+.huellago/
 application-local.properties
 application-private.properties
 *.log

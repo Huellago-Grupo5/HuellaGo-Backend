@@ -182,7 +182,8 @@ class IntegracionHabitualIATest {
     @Test void ejecucionHabitualConservaInicializacionYEsquemaAnteriores() throws Exception {
         var p=new java.util.Properties(); try(var r=java.nio.file.Files.newBufferedReader(java.nio.file.Path.of("src/main/resources/application.properties"))) { p.load(r); }
         assertEquals("true",p.getProperty("huellago.ollama.enabled")); assertEquals("127.0.0.1",p.getProperty("server.address"));
-        assertEquals("always",p.getProperty("spring.sql.init.mode")); assertEquals("update",p.getProperty("spring.jpa.hibernate.ddl-auto"));
+        assertEquals("never",p.getProperty("spring.sql.init.mode")); assertEquals("update",p.getProperty("spring.jpa.hibernate.ddl-auto"));
+        assertTrue(java.nio.file.Files.exists(java.nio.file.Path.of("src/main/java/com/huellago/backend/config/PostgresProjectInitializer.java")));
         assertNull(p.getProperty("spring.flyway.enabled")); assertNull(p.getProperty("spring.liquibase.enabled"));
         assertFalse(java.nio.file.Files.exists(java.nio.file.Path.of("src/main/resources/application-academico-local-ia.properties")));
         for(String nombre:List.of("AcademicoLocalIA","ProteccionAcademicaIA","AutorizacionAcademicaIA","AutenticacionAcademicaIA","FuenteAcademicaIA","EntradaAcademicaIA"))
