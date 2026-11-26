@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(controllers = {CampanaInstitucionalController.class, DashboardController.class,
+@WebMvcTest(controllers = {AmbienteController.class, CampanaInstitucionalController.class, DashboardController.class,
         DashboardInstitucionalController.class, EcoPuntosController.class, GrupoInstitucionalController.class,
         HabitoController.class, HuellaCarbonoController.class, InsigniaController.class,
         InstitucionController.class, LogrosController.class, NotificacionController.class,
@@ -56,6 +56,7 @@ class OpenApiDocumentationTest {
     @Autowired ApplicationContext contexto;
     @Autowired RequestMappingHandlerMapping mappings;
     @MockitoBean CampanaInstitucionalService campanas;
+    @MockitoBean AmbienteService ambiente;
     @MockitoBean DashboardService dashboard;
     @MockitoBean ReporteInstitucionalService reportes;
     @MockitoBean UsuarioService usuarios;
@@ -124,13 +125,38 @@ class OpenApiDocumentationTest {
                 }
             }
         }
-        assertEquals(75, encontradas);
+        assertEquals(77, encontradas);
     }
 
     @Test void jwtParametrosYArchivosAparecenEnElEsquemaReal() throws Exception {
         JsonNode api = documento();
         assertEquals("http", api.path("components").path("securitySchemes").path("bearerAuth").path("type").asText());
         assertEquals("bearer", api.path("components").path("securitySchemes").path("bearerAuth").path("scheme").asText());
+        for (String ruta : java.util.List.of("/ambiente/calidad-aire", "/ambiente/puntos-sostenibles")) {
+            JsonNode operacion = api.path("paths").path(ruta).path("get");
+            assertEquals("bearerAuth", operacion.path("security").get(0).fieldNames().next());
+            assertTrue(operacion.path("responses").has("200"));
+            JsonNode contenido = operacion.path("responses").path("200").path("content");
+            assertFalse(contenido.path("application/json").path("schema").isMissingNode()
+                    && contenido.path("*/*").path("schema").isMissingNode());
+            assertTrue(operacion.path("responses").has("401"));
+            assertTrue(operacion.path("responses").has("503"));
+            for (String estado : java.util.List.of("400", "502", "503")) {
+                JsonNode error = operacion.path("responses").path(estado)
+                        .path("content").path("application/json").path("schema");
+                assertFalse(error.isMissingNode(), ruta + " " + estado);
+                assertTrue(error.toString().contains("Error"), ruta + " " + estado);
+                assertNotEquals(contenido.path("application/json").path("schema"), error);
+            }
+            assertTrue(operacion.path("parameters").toString().contains("latitud"));
+        }
+        JsonNode puntos = api.path("paths").path("/ambiente/puntos-sostenibles").path("get");
+        assertTrue(puntos.path("description").asText().contains("Geoapify"));
+        JsonNode limite = puntos.path("responses").path("429")
+                .path("content").path("application/json").path("schema");
+        assertTrue(limite.toString().contains("Error"));
+        assertNotEquals(puntos.path("responses").path("200").path("content")
+                .path("application/json").path("schema"), limite);
         assertTrue(api.path("paths").path("/auth/register").path("post").path("responses").has("201"));
         assertTrue(api.path("paths").path("/usuarios/me/recomendaciones/{id}/convertir-en-reto")
                 .path("post").path("responses").has("201"));
@@ -159,5 +185,10 @@ class OpenApiDocumentationTest {
         mvc.perform(get("/v3/api-docs.yaml")).andExpect(status().isOk());
         mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
         mvc.perform(get("/usuarios/me/recomendaciones")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/ambiente/calidad-aire").param("latitud", "-12").param("longitud", "-77"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/ambiente/puntos-sostenibles").param("latitud", "-12")
+                .param("longitud", "-77").param("tipo", "RECICLAJE"))
+                .andExpect(status().isUnauthorized());
     }
 }

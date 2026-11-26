@@ -96,6 +96,34 @@ Las recomendaciones actuales están destinadas al uso universitario local y no c
 
 Para acceder a los endpoints protegidos, iniciar sesión mediante POST /auth/login e introducir el JWT obtenido en la opción Authorize de Swagger.
 
+## Datos ambientales externos
+
+Con JWT, `GET /ambiente/calidad-aire?latitud=-12.0464&longitud=-77.0428`
+consulta el modelo de calidad del aire de Open-Meteo/CAMS. La respuesta es
+orientativa y no representa una medición local ni emisiones de CO2.
+
+`GET /ambiente/puntos-sostenibles?latitud=-12.0464&longitud=-77.0428&radioMetros=3000&tipo=RECICLAJE`
+consulta Geoapify Places con datos de OpenStreetMap. Los otros tipos son
+`ESTACIONAMIENTO_BICICLETA` y `ALQUILER_BICICLETA`. Presenta la atribución
+Geoapify y OpenStreetMap/ODbL incluida en la respuesta. Los metadatos opcionales
+pueden faltar; la capacidad instalada no representa disponibilidad en tiempo real.
+
+Geoapify está deshabilitado por defecto. Para probarlo, configura en IntelliJ las
+variables de entorno `HUELLAGO_GEOAPIFY_ENABLED=true` y
+`HUELLAGO_GEOAPIFY_API_KEY` con la clave privada de tu proyecto. No guardes la
+clave en el repositorio. Se aplican hasta 20 resultados, 2 solicitudes externas
+por segundo, caché de 10 minutos y un presupuesto configurable por instancia
+de 1000 solicitudes externas al día (`HUELLAGO_GEOAPIFY_DAILY_LIMIT`).
+Los aciertos de caché no consumen el presupuesto local. El contador en memoria
+se reinicia al reiniciar el backend y no coordina varias instancias; supervisa
+también la cuota de Geoapify. El tiempo de espera se configura con
+`HUELLAGO_GEOAPIFY_READ_TIMEOUT_SECONDS`.
+
+Open-Meteo sigue habilitado para uso universitario local y puede deshabilitarse
+con `HUELLAGO_OPEN_METEO_ENABLED=false`. Sus ajustes existentes son
+`HUELLAGO_OPEN_METEO_URL`, `HUELLAGO_AMBIENTE_CONNECT_TIMEOUT_SECONDS` y
+`HUELLAGO_AMBIENTE_READ_TIMEOUT_SECONDS`.
+
 ## Base de datos
 
 PostgreSQL almacena la información del sistema.
