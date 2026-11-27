@@ -21,6 +21,9 @@ public interface UsuarioRetoRepository extends JpaRepository<UsuarioReto, Intege
 
     Optional<UsuarioReto> findByIdAndUsuario_Id(Integer id, Long usuarioId);
     List<UsuarioReto> findByReto_Id(Integer retoId);
+    List<UsuarioReto> findByUsuario_Id(Long usuarioId);
+    List<UsuarioReto> findByUsuario_IdAndEstadoIgnoreCaseOrderByFechaCompletadoDesc(
+            Long usuarioId, String estado);
 
     @Query(value = "SELECT reto_id FROM usuarios_retos WHERE id = :id AND usuario_id = :usuarioId",
             nativeQuery = true)

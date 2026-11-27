@@ -1,12 +1,15 @@
 package com.huellago.backend.serviceimpl;
 
 import com.huellago.backend.dtos.ActualizarProgresoDTO;
+import com.huellago.backend.dtos.RegistrarAvanceDTO;
 import com.huellago.backend.dtos.InsigniaRespuestaDTO;
 import com.huellago.backend.entities.Reto;
 import com.huellago.backend.entities.TipoReto;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.UsuarioReto;
 import com.huellago.backend.repositories.RetoRepository;
+import com.huellago.backend.repositories.AvanceRetoRepository;
+import com.huellago.backend.entities.AvanceReto;
 import com.huellago.backend.repositories.UsuarioRetoRepository;
 import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.services.InsigniaService;
@@ -25,6 +28,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,6 +39,7 @@ class RetoFinalizacionServiceImplTest {
     @Mock org.springframework.context.ApplicationEventPublisher eventos;
     @Mock RetoRepository retos;
     @Mock UsuarioRetoRepository participaciones;
+    @Mock AvanceRetoRepository avances;
     @Mock UsuarioRepository usuariosRepository;
     @Mock UsuarioService usuarios;
     @Mock InsigniaService insignias;
@@ -45,6 +50,7 @@ class RetoFinalizacionServiceImplTest {
     void completaParticipacionPropiaConCienSinPerderFechaDeAceptacion() {
         UsuarioReto participacion = participacion();
         participacion.setProgreso(BigDecimal.valueOf(100));
+        participacion.setCantidadAcumulada(BigDecimal.valueOf(100));
         LocalDateTime aceptacion = participacion.getFechaAceptacion();
         prepararPropietario(participacion);
         when(usuarios.actualizarNivel(participacion.getUsuario()))
@@ -88,6 +94,7 @@ class RetoFinalizacionServiceImplTest {
     void subidaDeNivelGeneraAvisoAdicionalEnLaFinalizacion() {
         UsuarioReto participacion = participacion();
         participacion.setProgreso(BigDecimal.valueOf(100));
+        participacion.setCantidadAcumulada(BigDecimal.valueOf(100));
         participacion.getUsuario().setNivel(1);
         prepararPropietario(participacion);
         when(usuarios.actualizarNivel(participacion.getUsuario())).thenAnswer(invocacion -> {
@@ -123,6 +130,7 @@ class RetoFinalizacionServiceImplTest {
         UsuarioReto participacion = participacion();
         participacion.getReto().setTipo(TipoReto.COLECTIVO);
         participacion.setProgreso(BigDecimal.valueOf(100));
+        participacion.setCantidadAcumulada(BigDecimal.valueOf(100));
         prepararPropietario(participacion);
 
         assertEquals(HttpStatus.CONFLICT, assertThrows(ResponseStatusException.class,
@@ -158,25 +166,57 @@ class RetoFinalizacionServiceImplTest {
     }
 
     @Test
-    void actualizarProgresoA100NoOtorgaRecompensas() {
-        UsuarioReto participacion = participacion();
-        when(participaciones.bloquearParticipacion(29, 22L)).thenReturn(Optional.of(29));
-        when(participaciones.findByIdAndUsuario_Id(29, 22L))
-                .thenReturn(Optional.of(participacion));
-        when(participaciones.save(participacion)).thenReturn(participacion);
-        var respuesta = servicio.actualizarProgreso(29, 22L,
-                new ActualizarProgresoDTO(BigDecimal.valueOf(100)));
-        assertEquals(0, respuesta.getProgreso().compareTo(BigDecimal.valueOf(100)));
-        assertEquals("activo", respuesta.getEstado());
-        assertNull(respuesta.getFechaCompletado());
-        assertEquals(10, participacion.getUsuario().getEcoPuntos());
+    void rechazaActualizarPorcentajeSinRegistrarCantidad() {
+        assertEquals(HttpStatus.CONFLICT, assertThrows(ResponseStatusException.class,
+                () -> servicio.actualizarProgreso(29, 22L,
+                        new ActualizarProgresoDTO(BigDecimal.valueOf(100)))).getStatusCode());
+        verify(participaciones, never()).save(any());
         verifyNoInteractions(usuarios, insignias);
+    }
+
+    @Test
+    void registraCantidadCalculaPorcentajeYGuardaUnEventoAuditable() {
+        UsuarioReto participacion = participacion();
+        participacion.setCantidadAcumulada(BigDecimal.ONE);
+        participacion.getReto().setMetaCantidad(BigDecimal.valueOf(3));
+        UUID clave = UUID.randomUUID();
+        when(participaciones.bloquearParticipacion(29, 22L)).thenReturn(Optional.of(29));
+        when(participaciones.findByIdAndUsuario_Id(29, 22L)).thenReturn(Optional.of(participacion));
+        when(avances.findByParticipacion_IdAndClaveSolicitud(29, clave)).thenReturn(Optional.empty());
+        when(participaciones.save(participacion)).thenReturn(participacion);
+
+        var respuesta = servicio.registrarAvance(29, 22L, new RegistrarAvanceDTO(new BigDecimal("1.5"), clave));
+
+        assertEquals(0, respuesta.getCantidadAcumulada().compareTo(new BigDecimal("2.500")));
+        assertEquals(0, respuesta.getProgreso().compareTo(new BigDecimal("83.33")));
+        verify(avances).save(argThat(evento -> evento.getCantidad().compareTo(new BigDecimal("1.500")) == 0
+                && clave.equals(evento.getClaveSolicitud()) && evento.getRegistradoEn() != null));
+        verify(participaciones).save(participacion);
+    }
+
+    @Test
+    void reintentarLaMismaClaveNoDuplicaElAvance() {
+        UsuarioReto participacion = participacion();
+        participacion.setCantidadAcumulada(BigDecimal.valueOf(2));
+        UUID clave = UUID.randomUUID();
+        AvanceReto registrado = new AvanceReto();
+        registrado.setCantidad(BigDecimal.ONE);
+        when(participaciones.bloquearParticipacion(29, 22L)).thenReturn(Optional.of(29));
+        when(participaciones.findByIdAndUsuario_Id(29, 22L)).thenReturn(Optional.of(participacion));
+        when(avances.findByParticipacion_IdAndClaveSolicitud(29, clave)).thenReturn(Optional.of(registrado));
+
+        var respuesta = servicio.registrarAvance(29, 22L, new RegistrarAvanceDTO(BigDecimal.ONE, clave));
+
+        assertEquals(0, respuesta.getCantidadAcumulada().compareTo(BigDecimal.valueOf(2)));
+        verify(avances, never()).save(any());
+        verify(participaciones, never()).save(any());
     }
 
     @Test
     void sumaRecompensasDeRetosDistintosAlSaldoAcumulado() {
         UsuarioReto primera = participacion();
         primera.setProgreso(BigDecimal.valueOf(100));
+        primera.setCantidadAcumulada(BigDecimal.valueOf(100));
         primera.getReto().setPuntosRecompensa(20);
         prepararPropietario(primera);
         when(usuarios.actualizarNivel(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
@@ -190,6 +230,7 @@ class RetoFinalizacionServiceImplTest {
         UsuarioReto segunda = participacion();
         segunda.setId(30);
         segunda.setProgreso(BigDecimal.valueOf(100));
+        segunda.setCantidadAcumulada(BigDecimal.valueOf(100));
         segunda.getUsuario().setEcoPuntos(30);
         segunda.getReto().setPuntosRecompensa(15);
         when(participaciones.bloquearParticipacion(30, 22L)).thenReturn(Optional.of(30));
@@ -205,6 +246,7 @@ class RetoFinalizacionServiceImplTest {
     void falloAlPersistirRecompensaInterrumpeLaFinalizacionTransaccional() throws Exception {
         UsuarioReto participacion = participacion();
         participacion.setProgreso(BigDecimal.valueOf(100));
+        participacion.setCantidadAcumulada(BigDecimal.valueOf(100));
         prepararPropietario(participacion);
         when(usuarios.actualizarNivel(any())).thenThrow(new IllegalStateException("fallo de persistencia"));
 
@@ -217,7 +259,7 @@ class RetoFinalizacionServiceImplTest {
 
     @Test
     void progresoInvalidoNoPersiste() {
-        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException.class,
+        assertEquals(HttpStatus.CONFLICT, assertThrows(ResponseStatusException.class,
                 () -> servicio.actualizarProgreso(29, 22L,
                         new ActualizarProgresoDTO(BigDecimal.valueOf(101)))).getStatusCode());
         verify(participaciones, never()).save(any());

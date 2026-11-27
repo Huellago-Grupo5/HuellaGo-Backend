@@ -163,6 +163,25 @@ class InstitucionServiceImplTest {
                 () -> servicio.consultarAdministracion(99L, 7L)).getStatusCode());
     }
 
+    @Test
+    void listaSoloLasAfiliacionesDelUsuarioYRespetaElRolPersistido() {
+        Institucion institucion = new Institucion();
+        institucion.setNombre("Universidad Verde");
+        institucion.setTipo(TipoInstitucion.UNIVERSIDAD);
+        UsuarioInstitucion vinculo = new UsuarioInstitucion();
+        vinculo.setInstitucion(institucion);
+        vinculo.setUsuario(representante);
+        vinculo.setRol(RolInstitucional.MIEMBRO);
+        when(afiliaciones.findByUsuario_IdOrderByIdAsc(22L)).thenReturn(List.of(vinculo));
+
+        var resultado = servicio.listarMisInstituciones(22L);
+
+        assertEquals(1, resultado.size());
+        assertEquals("Universidad Verde", resultado.getFirst().nombre());
+        assertEquals(RolInstitucional.MIEMBRO, resultado.getFirst().rol());
+        verify(afiliaciones).findByUsuario_IdOrderByIdAsc(22L);
+    }
+
     private InstitucionRegistroDTO datos(TipoInstitucion tipo) {
         return new InstitucionRegistroDTO(tipo, "Universidad Verde", "pe", "20123456789", "contacto@ejemplo.pe");
     }

@@ -53,6 +53,9 @@ public class CampanaInstitucionalServiceImpl implements CampanaInstitucionalServ
         reto.setActivo(true);
         reto.setTipo(TipoReto.COLECTIVO);
         reto.setPuntosRecompensa(0);
+        reto.setMetaCantidad(datos.metaCantidad() == null ? java.math.BigDecimal.ONE : datos.metaCantidad());
+        reto.setUnidadMedida(datos.unidadMedida() == null || datos.unidadMedida().isBlank()
+                ? "acciones" : datos.unidadMedida().trim());
         return respuesta(retos.saveAndFlush(reto), usuarioId);
     }
 
@@ -113,6 +116,12 @@ public class CampanaInstitucionalServiceImpl implements CampanaInstitucionalServ
         if (datos.fechaInicio().isBefore(LocalDate.now()) || datos.fechaFin().isBefore(datos.fechaInicio())
                 || datos.fechaInicio().getYear() > 9999 || datos.fechaFin().getYear() > 9999) {
             throw error(400, "El inicio no puede ser pasado y el fin debe ser igual o posterior al inicio, hasta el año 9999");
+        }
+        if ((datos.metaCantidad() == null) != (datos.unidadMedida() == null)
+                || (datos.metaCantidad() != null && datos.metaCantidad().signum() <= 0)
+                || (datos.unidadMedida() != null
+                    && (datos.unidadMedida().isBlank() || datos.unidadMedida().length() > 60))) {
+            throw error(400, "La meta cuantitativa debe ser positiva y su unidad debe tener entre 1 y 60 caracteres");
         }
     }
 

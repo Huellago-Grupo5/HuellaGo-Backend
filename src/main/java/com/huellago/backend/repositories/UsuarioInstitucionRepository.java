@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.List;
 
 public interface UsuarioInstitucionRepository extends JpaRepository<UsuarioInstitucion, Long> {
+    List<UsuarioInstitucion> findByUsuario_IdOrderByIdAsc(Long usuarioId);
     interface FilaRankingInstitucional {
         Long getUsuarioId();
         String getNombre();

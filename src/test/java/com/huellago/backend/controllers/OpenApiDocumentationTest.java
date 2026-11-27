@@ -37,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         DashboardInstitucionalController.class, EcoPuntosController.class, GrupoInstitucionalController.class,
         HabitoController.class, HuellaCarbonoController.class, InsigniaController.class,
         InstitucionController.class, LogrosController.class, NotificacionController.class,
-        ObjetivoAmbientalController.class, PreferenciaNotificacionController.class, PrivacidadController.class,
+        ObjetivoAmbientalController.class, PreferenciaNotificacionController.class, PreferenciasVisualesController.class, PrivacidadController.class,
         PublicacionComunitariaController.class, RankingComunitarioController.class,
         RecomendacionController.class, ReporteInstitucionalController.class,
         RetoColectivoController.class, RetoController.class, RetosActivosController.class,
@@ -125,7 +125,7 @@ class OpenApiDocumentationTest {
                 }
             }
         }
-        assertEquals(77, encontradas);
+        assertEquals(87, encontradas);
     }
 
     @Test void jwtParametrosYArchivosAparecenEnElEsquemaReal() throws Exception {

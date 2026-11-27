@@ -12,6 +12,7 @@ import org.springframework.web.servlet.i18n.AcceptHeaderLocaleResolver;
 public class InternacionalizacionConfiguration {
     public static final Locale ESPANOL = Locale.forLanguageTag("es-419");
     public static final Locale INGLES = Locale.forLanguageTag("en-US");
+    public static final Locale PORTUGUES = Locale.forLanguageTag("pt-BR");
 
     @Bean
     LocaleResolver localeResolver() {
@@ -24,6 +25,7 @@ public class InternacionalizacionConfiguration {
                         String etiqueta = preferida.toLanguageTag();
                         if ("es".equalsIgnoreCase(etiqueta) || "es-419".equalsIgnoreCase(etiqueta)) return ESPANOL;
                         if ("en".equalsIgnoreCase(etiqueta) || "en-US".equalsIgnoreCase(etiqueta)) return INGLES;
+                        if ("pt".equalsIgnoreCase(preferida.getLanguage())) return PORTUGUES;
                     }
                 } catch (IllegalArgumentException formatoInvalido) {
                     return ESPANOL;

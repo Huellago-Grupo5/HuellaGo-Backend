@@ -120,6 +120,17 @@ public class InstitucionServiceImpl implements InstitucionService {
         return new RankingInstitucionalDTO(institucionId, participantes, miPosicion, gruposDisponibles, mensaje);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.huellago.backend.dtos.InstitucionAfiliacionDTO> listarMisInstituciones(Long usuarioId) {
+        if (usuarioId == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Se requiere autenticación");
+        return afiliaciones.findByUsuario_IdOrderByIdAsc(usuarioId).stream()
+                .map(v -> new com.huellago.backend.dtos.InstitucionAfiliacionDTO(v.getInstitucion().getId(),
+                        v.getInstitucion().getNombre(), v.getInstitucion().getTipo(), v.getRol(),
+                        v.getGrupo() == null ? null : v.getGrupo().getNombre()))
+                .toList();
+    }
+
     private InstitucionRespuestaDTO respuesta(Institucion institucion, Long representanteId) {
         return new InstitucionRespuestaDTO(institucion.getId(), institucion.getTipo(),
                 institucion.getNombre(), institucion.getPais(), institucion.getIdentificadorFiscal(),

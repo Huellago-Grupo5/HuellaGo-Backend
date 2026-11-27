@@ -17,8 +17,10 @@ public class UsuarioRetoRespuestaDTO {
     private Integer retoId;
     private String estado;
     private BigDecimal progreso;
+    private BigDecimal cantidadAcumulada;
     private LocalDateTime fechaAceptacion;
     private LocalDateTime fechaCompletado;
+    private RetoRespuestaDTO reto;
     private List<InsigniaRespuestaDTO> insigniasDesbloqueadas = List.of();
 
     public UsuarioRetoRespuestaDTO(Integer id, Long usuarioId, Integer retoId,

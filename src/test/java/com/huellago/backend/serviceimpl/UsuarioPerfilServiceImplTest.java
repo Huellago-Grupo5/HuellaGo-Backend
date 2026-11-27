@@ -28,18 +28,11 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class UsuarioPerfilServiceImplTest {
 
-    @Mock
-    UsuarioRepository usuarioRepository;
-
-    @Mock
-    SesionRepository sesionRepository;
-
+    @Mock UsuarioRepository usuarioRepository;
+    @Mock SesionRepository sesionRepository;
     @Mock jakarta.persistence.EntityManager entityManager;
     @Mock com.huellago.backend.repositories.RecuperacionContrasenaRepository recuperaciones;
-
-    @InjectMocks
-    UsuarioServiceImpl service;
-
+    @InjectMocks UsuarioServiceImpl service;
     private Usuario usuario;
 
     @BeforeEach
@@ -55,7 +48,7 @@ class UsuarioPerfilServiceImplTest {
         usuario.setNotificacionesActivas(true);
         usuario.setVisibilidadComunidad(false);
         usuario.setFechaCreacion(LocalDateTime.now().minusMonths(1));
-        when(usuarioRepository.findByCorreo("anterior@huellago.com")).thenReturn(usuario);
+        org.mockito.Mockito.lenient().when(usuarioRepository.findByCorreo("anterior@huellago.com")).thenReturn(usuario);
         org.mockito.Mockito.lenient().when(usuarioRepository.bloquearParaRecomendaciones(22L))
                 .thenReturn(java.util.Optional.of(22L));
     }
@@ -64,14 +57,12 @@ class UsuarioPerfilServiceImplTest {
     void actualizaPerfilPersisteYProtegeCamposInternos() {
         Sesion sesion = new Sesion();
         sesion.setActiva(true);
-        when(usuarioRepository.existsByCorreoIgnoreCaseAndIdNot("nuevo@huellago.com", 22L))
-                .thenReturn(false);
+        when(usuarioRepository.existsByCorreoIgnoreCaseAndIdNot("nuevo@huellago.com", 22L)).thenReturn(false);
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocacion -> invocacion.getArgument(0));
         when(sesionRepository.findByUsuario_IdAndActivaTrue(22L)).thenReturn(List.of(sesion));
 
         var resultado = service.actualizarPerfil("anterior@huellago.com",
-                new UsuarioPerfilDTO("  Carlos Alberto  ", " Quispe Soto ",
-                        " NUEVO@HUELLAGO.COM "));
+                new UsuarioPerfilDTO("  Carlos Alberto  ", " Quispe Soto ", " NUEVO@HUELLAGO.COM "));
 
         assertEquals("Carlos Alberto", resultado.getNombres());
         assertEquals("Quispe Soto", resultado.getApellidos());
@@ -86,8 +77,7 @@ class UsuarioPerfilServiceImplTest {
 
     @Test
     void rechazaCorreoDuplicadoSinPersistir() {
-        when(usuarioRepository.existsByCorreoIgnoreCaseAndIdNot("duplicado@huellago.com", 22L))
-                .thenReturn(true);
+        when(usuarioRepository.existsByCorreoIgnoreCaseAndIdNot("duplicado@huellago.com", 22L)).thenReturn(true);
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
                 () -> service.actualizarPerfil("anterior@huellago.com",
@@ -108,5 +98,36 @@ class UsuarioPerfilServiceImplTest {
 
         verify(sesionRepository, never()).findByUsuario_IdAndActivaTrue(any());
         verify(sesionRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void preferenciasVisualesSePersistenYDevuelven() {
+        when(usuarioRepository.findById(22L)).thenReturn(java.util.Optional.of(usuario));
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        var resultado = service.actualizarPreferenciasVisuales(usuario,
+                new com.huellago.backend.dtos.PreferenciasVisualesDTO("oscuro", "imperial"));
+
+        assertEquals("oscuro", usuario.getTemaPreferido());
+        assertEquals("imperial", usuario.getUnidadesPreferidas());
+        assertEquals("oscuro", resultado.tema());
+        assertEquals("imperial", resultado.unidades());
+        verify(usuarioRepository).save(usuario);
+    }
+
+    @Test
+    void preferenciasVisualesInvalidasNoSePersisten() {
+        var error = assertThrows(ResponseStatusException.class, () -> service.actualizarPreferenciasVisuales(
+                usuario, new com.huellago.backend.dtos.PreferenciasVisualesDTO("sepia", "metric")));
+        assertEquals(400, error.getStatusCode().value());
+        verify(usuarioRepository, never()).save(any());
+    }
+
+    @Test
+    void rechazaPreferenciasNulasSinExponerErrorInterno() {
+        var error = assertThrows(ResponseStatusException.class, () -> service.actualizarPreferenciasVisuales(
+                usuario, new com.huellago.backend.dtos.PreferenciasVisualesDTO(null, null)));
+        assertEquals(400, error.getStatusCode().value());
+        verify(usuarioRepository, never()).save(any());
     }
 }

@@ -6,6 +6,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
 import com.huellago.backend.dtos.ActualizarProgresoDTO;
 import com.huellago.backend.dtos.UsuarioRetoRespuestaDTO;
+import com.huellago.backend.dtos.RegistrarAvanceDTO;
+import com.huellago.backend.dtos.AvanceRetoRespuestaDTO;
 import com.huellago.backend.security.UserSecurity;
 import com.huellago.backend.services.RetoService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -49,6 +52,29 @@ public class RetosActivosController {
             @AuthenticationPrincipal UserSecurity userSecurity) {
         return ResponseEntity.ok(retoService.actualizarProgreso(
                 usuarioRetoId, userSecurity.getUser().getId(), actualizarProgresoDTO));
+    }
+
+    @Operation(summary = "Registrar una cantidad de avance en un reto individual",
+            description = "Registra una cantidad idempotente y calcula el porcentaje en el servidor.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/{id}/avances")
+    public ResponseEntity<UsuarioRetoRespuestaDTO> registrarAvance(
+            @PathVariable("id") Integer participacionId,
+            @RequestBody RegistrarAvanceDTO dto,
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(retoService.registrarAvance(
+                participacionId, userSecurity.getUser().getId(), dto));
+    }
+
+    @Operation(summary = "Consultar el historial cuantitativo de un reto individual",
+            description = "Devuelve los avances propios ordenados por fecha.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/{id}/avances")
+    public ResponseEntity<List<AvanceRetoRespuestaDTO>> listarAvances(
+            @PathVariable("id") Integer participacionId,
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(retoService.listarAvances(
+                participacionId, userSecurity.getUser().getId()));
     }
 
     @Operation(summary = "Completar reto propio", description = "Completar reto propio. Consulta y actualiza participaciones propias; la finalización aplica recompensas vigentes.")

@@ -1,8 +1,10 @@
 package com.huellago.backend.serviceimpl;
 
 import com.huellago.backend.dtos.ActualizarProgresoDTO;
+import com.huellago.backend.dtos.RegistrarAvanceDTO;
 import com.huellago.backend.entities.*;
 import com.huellago.backend.repositories.ResultadoRetoColectivoRepository;
+import com.huellago.backend.repositories.AvanceRetoRepository;
 import com.huellago.backend.repositories.RetoRepository;
 import com.huellago.backend.repositories.UsuarioRetoRepository;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,7 @@ class RetoColectivoServiceImplTest {
     @Mock org.springframework.context.ApplicationEventPublisher eventos;
     @Mock RetoRepository retos;
     @Mock UsuarioRetoRepository participaciones;
+    @Mock AvanceRetoRepository avances;
     @Mock ResultadoRetoColectivoRepository resultados;
     @Mock com.huellago.backend.security.AutorizacionInstitucionalService autorizacionInstitucional;
     @InjectMocks RetoColectivoServiceImpl servicio;
@@ -63,8 +66,8 @@ class RetoColectivoServiceImplTest {
                 .when(autorizacionInstitucional).exigirMiembroParaParticipar(33L, 5L);
         assertEquals(HttpStatus.FORBIDDEN, error(() -> servicio.obtener(7, 33L)));
         assertEquals(HttpStatus.FORBIDDEN, error(() -> servicio.unirse(7, usuario(33L))));
-        assertEquals(HttpStatus.FORBIDDEN, error(() -> servicio.actualizarProgreso(1, 33L,
-                new ActualizarProgresoDTO(BigDecimal.valueOf(50)))));
+        assertEquals(HttpStatus.FORBIDDEN, error(() -> servicio.registrarAvance(1, 33L,
+                new RegistrarAvanceDTO(BigDecimal.ONE, java.util.UUID.randomUUID()))));
         verify(participaciones, never()).saveAndFlush(any());
         verify(participaciones, never()).save(any());
     }
@@ -165,28 +168,10 @@ class RetoColectivoServiceImplTest {
     }
 
     @Test
-    void actualizaSoloParticipacionPropiaYRechazaPeriodoCerrado() {
-        Reto reto = reto(7, LocalDate.now().plusDays(1));
-        UsuarioReto participacion = participacion(1, 22L, reto, 0);
-        when(participaciones.buscarRetoIdDeParticipacion(1, 22L)).thenReturn(Optional.of(7));
-        when(retos.bloquearParaAceptacion(7)).thenReturn(Optional.of(7));
-        when(retos.findById(7)).thenReturn(Optional.of(reto));
-        when(participaciones.bloquearParticipacion(1, 22L)).thenReturn(Optional.of(1));
-        when(participaciones.findByIdAndUsuario_Id(1, 22L)).thenReturn(Optional.of(participacion));
-        when(participaciones.save(participacion)).thenReturn(participacion);
-
-        assertEquals(50, servicio.actualizarProgreso(1, 22L,
-                new ActualizarProgresoDTO(BigDecimal.valueOf(50))).getProgreso().intValue());
-        when(participaciones.findByReto_Id(7)).thenReturn(List.of(participacion));
-        assertEquals(0, servicio.obtener(7).getProgresoColectivo()
-                .compareTo(new BigDecimal("50.00")));
-        assertEquals(HttpStatus.NOT_FOUND, error(() -> servicio.actualizarProgreso(1, 33L,
-                new ActualizarProgresoDTO(BigDecimal.valueOf(80)))));
-        reto.setFechaFin(LocalDate.now().minusDays(1));
+    void rechazaActualizarPorcentajeColectivoSinCantidad() {
         assertEquals(HttpStatus.CONFLICT, error(() -> servicio.actualizarProgreso(1, 22L,
-                new ActualizarProgresoDTO(BigDecimal.valueOf(80)))));
-        assertEquals(50, participacion.getProgreso().intValue());
-        verify(participaciones, times(1)).save(any());
+                new ActualizarProgresoDTO(BigDecimal.valueOf(50)))));
+        verify(participaciones, never()).save(any());
     }
 
     @Test
@@ -252,10 +237,13 @@ class RetoColectivoServiceImplTest {
         when(retos.findById(7)).thenReturn(Optional.of(reto));
         when(resultados.existsByReto_Id(7)).thenReturn(true);
         when(participaciones.buscarRetoIdDeParticipacion(1, 22L)).thenReturn(Optional.of(7));
+        when(participaciones.bloquearParticipacion(1, 22L)).thenReturn(Optional.of(1));
+        when(participaciones.findByIdAndUsuario_Id(1, 22L))
+                .thenReturn(Optional.of(participacion(1, 22L, reto, 0)));
 
         assertEquals(HttpStatus.CONFLICT, error(() -> servicio.unirse(7, usuario(22L))));
-        assertEquals(HttpStatus.CONFLICT, error(() -> servicio.actualizarProgreso(1, 22L,
-                new ActualizarProgresoDTO(BigDecimal.valueOf(50)))));
+        assertEquals(HttpStatus.CONFLICT, error(() -> servicio.registrarAvance(1, 22L,
+                new RegistrarAvanceDTO(BigDecimal.ONE, java.util.UUID.randomUUID()))));
         verify(participaciones, never()).save(any());
         verify(participaciones, never()).saveAndFlush(any());
     }
@@ -266,6 +254,8 @@ class RetoColectivoServiceImplTest {
                 .getAnnotation(Transactional.class));
         assertNotNull(RetoColectivoServiceImpl.class.getMethod("actualizarProgreso", Integer.class,
                 Long.class, ActualizarProgresoDTO.class).getAnnotation(Transactional.class));
+        assertNotNull(RetoColectivoServiceImpl.class.getMethod("registrarAvance", Integer.class,
+                Long.class, RegistrarAvanceDTO.class).getAnnotation(Transactional.class));
         assertTrue(RetoRepository.class.getMethod("bloquearParaAceptacion", Integer.class)
                 .getAnnotation(org.springframework.data.jpa.repository.Query.class)
                 .value().contains("FOR UPDATE"));

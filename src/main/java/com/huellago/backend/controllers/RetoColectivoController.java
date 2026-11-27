@@ -7,6 +7,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import com.huellago.backend.dtos.ActualizarProgresoDTO;
 import com.huellago.backend.dtos.RetoColectivoDTO;
 import com.huellago.backend.dtos.UsuarioRetoRespuestaDTO;
+import com.huellago.backend.dtos.RegistrarAvanceDTO;
+import com.huellago.backend.dtos.AvanceRetoRespuestaDTO;
 import com.huellago.backend.security.UserSecurity;
 import com.huellago.backend.services.RetoColectivoService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +55,25 @@ public class RetoColectivoController {
             @RequestBody ActualizarProgresoDTO dto,
             @AuthenticationPrincipal UserSecurity autenticado) {
         return servicio.actualizarProgreso(id, autenticado.getUser().getId(), dto);
+    }
+
+    @Operation(summary = "Registrar una cantidad de avance colectivo",
+            description = "Registra una cantidad idempotente y recalcula el promedio grupal.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/participaciones/{id}/avances")
+    public UsuarioRetoRespuestaDTO registrarAvance(@PathVariable Integer id,
+            @RequestBody RegistrarAvanceDTO dto,
+            @AuthenticationPrincipal UserSecurity autenticado) {
+        return servicio.registrarAvance(id, autenticado.getUser().getId(), dto);
+    }
+
+    @Operation(summary = "Consultar el historial de avance colectivo propio",
+            description = "Devuelve los avances del participante autenticado ordenados por fecha.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/participaciones/{id}/avances")
+    public List<AvanceRetoRespuestaDTO> avances(@PathVariable Integer id,
+            @AuthenticationPrincipal UserSecurity autenticado) {
+        return servicio.listarAvances(id, autenticado.getUser().getId());
     }
 
     @ExceptionHandler(ResponseStatusException.class)

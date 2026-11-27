@@ -270,6 +270,8 @@ public class RecomendacionServiceImpl implements RecomendacionService {
         reto.setDescripcion(contenido.descripcion());
         reto.setCategoria(recomendacion.getCategoria());
         reto.setPuntosRecompensa(0);
+        reto.setMetaCantidad(BigDecimal.ONE);
+        reto.setUnidadMedida("acciones");
         reto.setFechaInicio(LocalDate.now());
         reto.setActivo(true);
         reto.setTipo(TipoReto.INDIVIDUAL);

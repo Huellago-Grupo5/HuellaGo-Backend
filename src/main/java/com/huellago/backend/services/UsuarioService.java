@@ -13,6 +13,7 @@ import com.huellago.backend.dtos.PreferenciaNotificacionActualizarDTO;
 import com.huellago.backend.dtos.PreferenciaNotificacionDTO;
 import com.huellago.backend.dtos.PrivacidadActualizarDTO;
 import com.huellago.backend.dtos.PrivacidadDTO;
+import com.huellago.backend.dtos.PreferenciasVisualesDTO;
 import com.huellago.backend.dtos.RankingComunitarioDTO;
 import com.huellago.backend.entities.Usuario;
 
@@ -22,6 +23,8 @@ public interface UsuarioService {
     public com.huellago.backend.dtos.RecuperacionRespuestaDTO solicitarRecuperacion(RecuperarContrasenaDTO recuperarContrasenaDTO);
     public void restablecerContrasena(RestablecerContrasenaDTO restablecerContrasenaDTO);
     public UsuarioRespuestaDTO actualizarPerfil(String correoAutenticado, UsuarioPerfilDTO usuarioPerfilDTO);
+    public UsuarioRespuestaDTO obtenerPerfil(Usuario usuarioAutenticado);
+    public void cambiarContrasena(Usuario usuarioAutenticado, String contrasenaActual, String contrasenaNueva);
     public EcoPuntosRespuestaDTO otorgarEcoPuntos(Usuario usuario, EcoPuntosAccionDTO ecoPuntosAccionDTO);
     public Usuario actualizarNivel(Usuario usuario);
     public NivelRespuestaDTO obtenerNivel(Usuario usuario);
@@ -31,5 +34,7 @@ public interface UsuarioService {
     public PrivacidadDTO obtenerPrivacidad(Usuario usuario);
     public PrivacidadDTO actualizarPrivacidad(
             Usuario usuario, PrivacidadActualizarDTO dto);
+    public PreferenciasVisualesDTO obtenerPreferenciasVisuales(Usuario usuario);
+    public PreferenciasVisualesDTO actualizarPreferenciasVisuales(Usuario usuario, PreferenciasVisualesDTO dto);
     RankingComunitarioDTO obtenerRankingComunitario(Usuario usuarioAutenticado);
 }

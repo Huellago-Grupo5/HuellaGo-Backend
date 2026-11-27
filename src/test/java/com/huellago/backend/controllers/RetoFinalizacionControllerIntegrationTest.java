@@ -2,6 +2,7 @@ package com.huellago.backend.controllers;
 
 import com.huellago.backend.dtos.ActualizarProgresoDTO;
 import com.huellago.backend.dtos.UsuarioRetoRespuestaDTO;
+import com.huellago.backend.dtos.RegistrarAvanceDTO;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.repositories.SesionRepository;
 import com.huellago.backend.security.JwtRequestFilter;
@@ -30,6 +31,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -47,7 +49,8 @@ class RetoFinalizacionControllerIntegrationTest {
     @Test
     void progresoYFinalizacionUsanElUsuarioDelJwt() throws Exception {
         when(retos.actualizarProgreso(eq(29), eq(22L), anyProgresoCien()))
-                .thenReturn(respuesta("activo", null));
+                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT,
+                        "El progreso se registra como cantidades mediante POST /retos-activos/{id}/avances"));
         when(retos.completarReto(29, 22L))
                 .thenReturn(respuesta("completado", LocalDateTime.now()));
 
@@ -55,9 +58,8 @@ class RetoFinalizacionControllerIntegrationTest {
                         .with(authentication(autenticacion()))
                         .contentType("application/json")
                         .content("{\"progreso\":100,\"usuarioId\":99}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.usuarioId").value(22))
-                .andExpect(jsonPath("$.estado").value("activo"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("El progreso se registra como cantidades mediante POST /retos-activos/{id}/avances"));
         mvc.perform(put("/retos-activos/29/completar")
                         .with(authentication(autenticacion())))
                 .andExpect(status().isOk())
@@ -68,6 +70,22 @@ class RetoFinalizacionControllerIntegrationTest {
                 .andExpect(jsonPath("$.fechaCompletado").exists());
         verify(retos).actualizarProgreso(eq(29), eq(22L), anyProgresoCien());
         verify(retos).completarReto(29, 22L);
+    }
+
+    @Test
+    void registraCantidadConLaIdentidadDelJwt() throws Exception {
+        when(retos.registrarAvance(eq(29), eq(22L), any(RegistrarAvanceDTO.class)))
+                .thenReturn(respuesta("activo", null));
+        mvc.perform(post("/retos-activos/29/avances")
+                        .with(authentication(autenticacion()))
+                        .contentType("application/json")
+                        .content("{\"cantidad\":2,\"claveSolicitud\":\"f6a338e7-5a57-4ac7-8507-d7a2f64afbb1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usuarioId").value(22))
+                .andExpect(jsonPath("$.estado").value("activo"));
+        verify(retos).registrarAvance(eq(29), eq(22L), argThat(dto ->
+                dto.cantidad().compareTo(BigDecimal.valueOf(2)) == 0
+                        && dto.claveSolicitud().toString().equals("f6a338e7-5a57-4ac7-8507-d7a2f64afbb1")));
     }
 
     @Test

@@ -32,7 +32,7 @@ public class OpenApiConfiguration {
         return api -> api.getPaths().forEach((ruta, item) ->
                 item.readOperationsMap().forEach((metodo, operacion) -> {
                     operacion.addParametersItem(new Parameter().in("header").name("Accept-Language")
-                            .required(false).description("Idioma de los mensajes: es-419 (predeterminado) o en-US; también se aceptan es y en.")
+                            .required(false).description("Idioma de los mensajes: es-419 (predeterminado), en-US o pt-BR; también se aceptan es, en y pt.")
                             .schema(new StringSchema()._default("es-419")).example("en-US"));
                     var respuestas = operacion.getResponses();
                     if (!ruta.equals("/auth/login") && !ruta.equals("/auth/register")
@@ -59,6 +59,9 @@ public class OpenApiConfiguration {
                                     || ruta.matches("/instituciones/\\{id}/grupos")
                                     || ruta.matches("/usuarios/me/recomendaciones/\\{id}/convertir-en-reto")
                                     || ruta.matches("/retos/\\{id}/aceptar")
+                                    || ruta.matches("/retos-activos/\\{id}/avances")
+                                    || ruta.matches("/retos/colectivos/participaciones/\\{id}/avances")
+                                    || ruta.matches("/retos/completados")
                                     || ruta.matches("/retos/colectivos/\\{id}/unirse"));
                     boolean sinContenido = metodo.name().equals("DELETE") && (
                             ruta.equals("/sesiones/actual") || ruta.equals("/instituciones/{id}/grupos/{grupoId}"))

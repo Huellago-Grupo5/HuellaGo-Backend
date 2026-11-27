@@ -20,4 +20,18 @@ public class RetoColectivoDTO {
     private BigDecimal progresoColectivo;
     private String estado;
     private LocalDateTime fechaCierre;
+    private java.math.BigDecimal metaCantidad;
+    private String unidadMedida;
+
+    public RetoColectivoDTO(Integer retoId, String titulo, LocalDate fechaInicio, LocalDate fechaFin,
+            Integer participantes, BigDecimal progresoColectivo, String estado, LocalDateTime fechaCierre) {
+        this.retoId = retoId;
+        this.titulo = titulo;
+        this.fechaInicio = fechaInicio;
+        this.fechaFin = fechaFin;
+        this.participantes = participantes;
+        this.progresoColectivo = progresoColectivo;
+        this.estado = estado;
+        this.fechaCierre = fechaCierre;
+    }
 }

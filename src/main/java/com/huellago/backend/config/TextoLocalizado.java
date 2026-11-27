@@ -3,6 +3,7 @@ package com.huellago.backend.config;
 import java.util.Locale;
 import java.util.ResourceBundle;
 import java.util.Comparator;
+import java.util.List;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
@@ -23,7 +24,7 @@ public class TextoLocalizado {
     public String traducir(String original) {
         if (original == null || original.isBlank()) return original;
         Locale idioma = LocaleContextHolder.getLocale();
-        if (!"en".equals(idioma.getLanguage())) return original;
+        if (!"en".equals(idioma.getLanguage()) && !"pt".equals(idioma.getLanguage())) return original;
         String directo = mensajes.getMessage(original, null, null, idioma);
         if (directo != null) return directo;
         int separador = original.indexOf(": ");
@@ -31,7 +32,8 @@ public class TextoLocalizado {
             String detalle = mensajes.getMessage(original.substring(separador + 2), null, null, idioma);
             if (detalle != null) return original.substring(0, separador + 2) + detalle;
         }
-        ResourceBundle catalogo = ResourceBundle.getBundle("messages", InternacionalizacionConfiguration.INGLES);
+        ResourceBundle catalogo = ResourceBundle.getBundle("messages", idioma.getLanguage().equals("pt")
+                ? InternacionalizacionConfiguration.PORTUGUES : InternacionalizacionConfiguration.INGLES);
         for (String prefijo : catalogo.keySet().stream()
                 .filter(clave -> clave.endsWith(" ") && clave.length() > 8)
                 .sorted(Comparator.comparingInt(String::length).reversed()).toList()) {
@@ -44,11 +46,13 @@ public class TextoLocalizado {
     public String traducirCompuesto(String original) {
         String exacto = traducir(original);
         if (original == null || !original.equals(exacto)
-                || !"en".equals(LocaleContextHolder.getLocale().getLanguage())) return exacto;
+                || !List.of("en", "pt").contains(LocaleContextHolder.getLocale().getLanguage())) return exacto;
         // Algunos mensajes existentes concatenan dos frases de presentación.
         // Se sustituyen solamente entradas explícitas del catálogo de traducciones.
         String traducido = original;
-        ResourceBundle catalogo = ResourceBundle.getBundle("messages", InternacionalizacionConfiguration.INGLES);
+        Locale locale = LocaleContextHolder.getLocale();
+        ResourceBundle catalogo = ResourceBundle.getBundle("messages", locale.getLanguage().equals("pt")
+                ? InternacionalizacionConfiguration.PORTUGUES : InternacionalizacionConfiguration.INGLES);
         for (String frase : catalogo.keySet().stream()
                 .filter(clave -> !clave.startsWith("auth."))
                 .sorted(Comparator.comparingInt(String::length).reversed()).toList()) {

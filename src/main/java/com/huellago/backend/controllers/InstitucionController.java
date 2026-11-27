@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import java.net.URI;
+import java.util.List;
 
 @Tag(name = "Instituciones", description = "Gestión institucional con permisos de administrador y pertenencia para las consultas protegidas.")
 @SecurityRequirement(name = "bearerAuth")
@@ -24,6 +25,13 @@ public class InstitucionController {
 
     public InstitucionController(InstitucionService servicio) {
         this.servicio = servicio;
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "Listar mis afiliaciones institucionales", description = "Lista solo los vínculos institucionales de la identidad autenticada y devuelve el rol registrado por cada uno.")
+    public ResponseEntity<List<com.huellago.backend.dtos.InstitucionAfiliacionDTO>> misInstituciones(
+            @AuthenticationPrincipal UserSecurity usuario) {
+        return ResponseEntity.ok(servicio.listarMisInstituciones(usuario.getUser().getId()));
     }
 
     @Operation(summary = "Registrar institución", description = "Registrar institución. Gestión institucional con permisos de administrador y pertenencia para las consultas protegidas.")

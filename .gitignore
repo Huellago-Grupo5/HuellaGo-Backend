@@ -40,6 +40,12 @@ build/
 !.env.example
 *.env
 *.pgpass
+*.dump
+*.backup
+*.bak
+*.sql.gz
+*.sql.zip
+*.pgdump
 *.p12
 *.pfx
 *.jks

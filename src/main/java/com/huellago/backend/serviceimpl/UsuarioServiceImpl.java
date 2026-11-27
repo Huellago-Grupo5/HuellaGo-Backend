@@ -13,6 +13,7 @@ import com.huellago.backend.dtos.PreferenciaNotificacionActualizarDTO;
 import com.huellago.backend.dtos.PreferenciaNotificacionDTO;
 import com.huellago.backend.dtos.PrivacidadActualizarDTO;
 import com.huellago.backend.dtos.PrivacidadDTO;
+import com.huellago.backend.dtos.PreferenciasVisualesDTO;
 import com.huellago.backend.dtos.RankingComunitarioDTO;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.Sesion;
@@ -178,6 +179,35 @@ public class UsuarioServiceImpl implements UsuarioService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public UsuarioRespuestaDTO obtenerPerfil(Usuario usuarioAutenticado) {
+        Usuario usuario = obtenerUsuarioActual(usuarioAutenticado);
+        return new UsuarioRespuestaDTO(usuario.getId(), usuario.getNombres(), usuario.getApellidos(),
+                usuario.getCorreo(), usuario.getEcoPuntos(), usuario.getNivel(),
+                usuario.getNotificacionesActivas(), usuario.getVisibilidadComunidad(),
+                usuario.getFechaCreacion(), usuario.getFechaActualizacion());
+    }
+
+    @Override
+    @Transactional
+    public void cambiarContrasena(Usuario usuarioAutenticado, String contrasenaActual,
+            String contrasenaNueva) {
+        Usuario usuario = obtenerUsuarioActual(usuarioAutenticado);
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+        if (!encoder.matches(contrasenaActual, usuario.getContrasena())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La contraseña actual no es correcta");
+        }
+        if (encoder.matches(contrasenaNueva, usuario.getContrasena())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La nueva contraseña debe ser diferente a la actual");
+        }
+        usuario.setContrasena(encoder.encode(contrasenaNueva));
+        usuario.setFechaActualizacion(LocalDateTime.now());
+        usuarioRepository.save(usuario);
+    }
+
+    @Override
     public EcoPuntosRespuestaDTO otorgarEcoPuntos(
             Usuario usuario, EcoPuntosAccionDTO dto) {
         if (dto == null || dto.getAccion() == null || dto.getAccion().isBlank()) {
@@ -265,6 +295,34 @@ public class UsuarioServiceImpl implements UsuarioService {
                 usuario.getVisibilidadComunidad(),
                 usuario.getFechaActualizacion()
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PreferenciasVisualesDTO obtenerPreferenciasVisuales(Usuario autenticado) {
+        Usuario usuario = obtenerUsuarioActual(autenticado);
+        return mapearPreferenciasVisuales(usuario);
+    }
+
+    @Override
+    @Transactional
+    public PreferenciasVisualesDTO actualizarPreferenciasVisuales(Usuario autenticado, PreferenciasVisualesDTO dto) {
+        if (dto == null || dto.tema() == null || dto.unidades() == null
+                || !java.util.Set.of("claro", "oscuro").contains(dto.tema())
+                || !java.util.Set.of("metric", "imperial").contains(dto.unidades())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Preferencias visuales inválidas");
+        }
+        Usuario usuario = obtenerUsuarioActual(autenticado);
+        usuario.setTemaPreferido(dto.tema());
+        usuario.setUnidadesPreferidas(dto.unidades());
+        usuario.setFechaActualizacion(LocalDateTime.now());
+        usuarioRepository.save(usuario);
+        return mapearPreferenciasVisuales(usuario);
+    }
+
+    private PreferenciasVisualesDTO mapearPreferenciasVisuales(Usuario usuario) {
+        return new PreferenciasVisualesDTO(usuario.getTemaPreferido() == null ? "claro" : usuario.getTemaPreferido(),
+                usuario.getUnidadesPreferidas() == null ? "metric" : usuario.getUnidadesPreferidas());
     }
 
     @Override

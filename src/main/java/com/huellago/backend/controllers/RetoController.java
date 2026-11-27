@@ -40,6 +40,15 @@ public class RetoController {
         return ResponseEntity.ok(retoService.listarRetosDisponibles(userSecurity.getUser().getId(), clasificacion));
     }
 
+    @Operation(summary = "Listar mis retos completados",
+            description = "Devuelve las participaciones completadas persistidas del usuario autenticado.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/completados")
+    public ResponseEntity<List<UsuarioRetoRespuestaDTO>> listarRetosCompletados(
+            @AuthenticationPrincipal UserSecurity userSecurity) {
+        return ResponseEntity.ok(retoService.listarRetosCompletados(userSecurity.getUser().getId()));
+    }
+
     @Operation(summary = "Aceptar reto", description = "Aceptar reto. Lista retos disponibles por clasificación y permite aceptar retos propios.")
     @PostMapping("/{id}/aceptar")
     public ResponseEntity<UsuarioRetoRespuestaDTO> aceptarReto(

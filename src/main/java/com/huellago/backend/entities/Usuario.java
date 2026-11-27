@@ -29,6 +29,8 @@ public class Usuario {
     private Integer nivel;
     private Boolean notificacionesActivas;
     private Boolean visibilidadComunidad;
+    private String temaPreferido = "claro";
+    private String unidadesPreferidas = "metric";
     private LocalDateTime fechaCreacion;
     private LocalDateTime fechaActualizacion;
 

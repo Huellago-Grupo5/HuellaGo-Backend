@@ -15,6 +15,7 @@ import java.util.*;
 
 /** Adaptador del flujo IA existente para usuarios autenticados en uso universitario local, no otro escritor/orquestador. Lee instantaneas solo despues del guardado. */
 class EntradaRecomendacionesIA implements EntradaDemostracionRecomendacionesIA {
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(EntradaRecomendacionesIA.class);
     private final GeneracionManualIAService generacion;
     private final UsuarioRecomendacionIARepository asociaciones;
     private final TransactionTemplate lectura;
@@ -80,6 +81,7 @@ class EntradaRecomendacionesIA implements EntradaDemostracionRecomendacionesIA {
             return ResponseEntity.ok(dto);
         } catch(ResponseStatusException e) { return ResponseEntity.status(e.getStatusCode()).body(responder(codigo(e.getReason()))); }
         catch(OllamaClientException e) {
+            LOG.warn("Fallo del generador Ollama tipo={} estadoHttp={}", e.getTipo(), e.getEstadoHttp());
             int status=switch(e.getTipo()) { case TIEMPO_AGOTADO -> 504; case NO_DISPONIBLE -> 503; case CONTEXTO_INVALIDO -> 400; default -> 502; };
             return ResponseEntity.status(status).body(responder("OLLAMA_"+e.getTipo().name()));
         } catch(DataAccessException|TransactionException e) { return ResponseEntity.status(503).body(responder("PERSISTENCIA_NO_DISPONIBLE")); }

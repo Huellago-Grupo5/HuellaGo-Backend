@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 
 @Data
 @AllArgsConstructor
@@ -23,6 +24,8 @@ public class RetoRespuestaDTO {
     private String categoriaNombre;
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private String clasificacion;
+    private BigDecimal metaCantidad;
+    private String unidadMedida;
 
     public RetoRespuestaDTO(Integer id, String titulo, String descripcion, Integer puntosRecompensa,
             String dificultad, LocalDate fechaInicio, LocalDate fechaFin, Boolean activo,

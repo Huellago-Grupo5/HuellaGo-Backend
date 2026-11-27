@@ -75,10 +75,22 @@ class PostgresProjectInitializerTest {
         String v1 = Files.readString(Path.of("db/migration/V1__retos_colectivos.sql"));
         String v2 = Files.readString(Path.of("db/migration/V2__conversion_recomendaciones_retos.sql"));
         String v3 = Files.readString(Path.of("db/migration/V3__publicaciones_comunitarias.sql"));
+        String v6 = Files.readString(Path.of("db/migration/V6__seguimiento_cuantitativo_retos.sql"));
+        String v7 = Files.readString(Path.of("db/migration/V7__preferencias_visuales_usuario.sql"));
         assertTrue(v1.contains("CREATE TABLE IF NOT EXISTS public.resultados_retos_colectivos"));
         assertTrue(v1.contains("ADD COLUMN IF NOT EXISTS tipo varchar(20)"));
         assertTrue(v2.contains("ADD COLUMN IF NOT EXISTS usuario_recomendacion_ia_id integer"));
         assertTrue(v3.contains("CREATE TABLE IF NOT EXISTS public.publicaciones_comunitarias"));
+        assertTrue(v6.contains("ADD COLUMN IF NOT EXISTS meta_cantidad numeric(12,3)"));
+        assertTrue(v6.contains("ADD COLUMN IF NOT EXISTS cantidad_acumulada numeric(12,3)"));
+        assertTrue(v6.contains("CREATE TABLE IF NOT EXISTS public.avances_retos"));
+        assertTrue(v6.contains("Reto: muévete en bicicleta"));
+        assertFalse(v6.contains("INSERT INTO public.avances_retos"),
+                "La migración no inventa eventos históricos de progreso");
+        assertTrue(v7.contains("ADD COLUMN IF NOT EXISTS tema_preferido"));
+        assertTrue(v7.contains("ADD COLUMN IF NOT EXISTS unidades_preferidas"));
+        assertTrue(v7.contains("WHERE tema_preferido IS NULL"));
+        assertTrue(v7.contains("WHERE unidades_preferidas IS NULL"));
 
         try (Stream<Path> migrations = Files.list(Path.of("db/migration"))) {
             for (Path migration : migrations.toList()) {

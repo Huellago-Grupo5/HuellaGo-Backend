@@ -3,12 +3,16 @@ package com.huellago.backend.serviceimpl;
 import com.huellago.backend.dtos.RetoRespuestaDTO;
 import com.huellago.backend.dtos.UsuarioRetoRespuestaDTO;
 import com.huellago.backend.dtos.ActualizarProgresoDTO;
+import com.huellago.backend.dtos.RegistrarAvanceDTO;
+import com.huellago.backend.dtos.AvanceRetoRespuestaDTO;
 import com.huellago.backend.entities.Reto;
+import com.huellago.backend.entities.AvanceReto;
 import com.huellago.backend.entities.TipoReto;
 import com.huellago.backend.entities.Usuario;
 import com.huellago.backend.entities.UsuarioReto;
 import com.huellago.backend.repositories.RetoRepository;
 import com.huellago.backend.repositories.UsuarioRetoRepository;
+import com.huellago.backend.repositories.AvanceRetoRepository;
 import com.huellago.backend.repositories.UsuarioRepository;
 import com.huellago.backend.services.RetoService;
 import com.huellago.backend.services.UsuarioService;
@@ -23,6 +27,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.util.List;
@@ -53,6 +58,9 @@ public class RetoServiceImpl implements RetoService {
     @Autowired
     NotificacionService notificacionService;
 
+    @Autowired
+    AvanceRetoRepository avanceRetoRepository;
+
     @Override
     public List<RetoRespuestaDTO> listarRetosActivos() {
         LocalDate hoy = LocalDate.now();
@@ -81,7 +89,11 @@ public class RetoServiceImpl implements RetoService {
                             && Objects.equals(usuarioId,r.getRecomendacionOrigen().getUsuario().getId()) && disponible(r,hoy))
                     .map(this::convertirADTO).distinct().toList();
         }
+        Set<Integer> yaAceptados = usuarioRetoRepository.findByUsuario_Id(usuarioId).stream()
+                .map(p -> p.getReto() == null ? null : p.getReto().getId())
+                .filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
         return listarRetosActivos().stream()
+                .filter(r -> !yaAceptados.contains(r.getId()))
                 .filter(r -> filtro == null || filtro.equals(r.getClasificacion())).toList();
     }
 
@@ -156,40 +168,76 @@ public class RetoServiceImpl implements RetoService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<UsuarioRetoRespuestaDTO> listarRetosCompletados(Long usuarioId) {
+        return usuarioRetoRepository.findByUsuario_IdAndEstadoIgnoreCaseOrderByFechaCompletadoDesc(
+                usuarioId, "completado").stream().map(this::convertirARespuesta).toList();
+    }
+
+    @Override
+    @Transactional
+    public UsuarioRetoRespuestaDTO registrarAvance(Integer usuarioRetoId, Long usuarioId, RegistrarAvanceDTO dto) {
+        if (dto == null || dto.cantidad() == null || dto.claveSolicitud() == null
+                || dto.cantidad().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La cantidad positiva y la clave de solicitud son obligatorias");
+        }
+        final BigDecimal cantidad;
+        try {
+            cantidad = dto.cantidad().setScale(3, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La cantidad admite hasta tres decimales");
+        }
+        usuarioRetoRepository.bloquearParticipacion(usuarioRetoId, usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Participación no encontrada"));
+        UsuarioReto participacion = usuarioRetoRepository.findByIdAndUsuario_Id(usuarioRetoId, usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Participación no encontrada"));
+        if (avanceRetoRepository.findByParticipacion_IdAndClaveSolicitud(usuarioRetoId, dto.claveSolicitud()).isPresent()) {
+            return convertirARespuesta(participacion);
+        }
+        if (!"activo".equalsIgnoreCase(participacion.getEstado()) || participacion.getFechaCompletado() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "La participación no está activa");
+        }
+        Reto reto = participacion.getReto();
+        if (reto == null || reto.getMetaCantidad() == null || reto.getMetaCantidad().signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "El reto no tiene una meta cuantitativa válida");
+        }
+        BigDecimal acumulado = participacion.getCantidadAcumulada() == null
+                ? BigDecimal.ZERO : participacion.getCantidadAcumulada();
+        BigDecimal total = acumulado.add(cantidad).setScale(3, RoundingMode.UNNECESSARY);
+        if (total.compareTo(reto.getMetaCantidad()) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La cantidad supera lo que falta para alcanzar la meta");
+        }
+        AvanceReto avance = new AvanceReto();
+        avance.setParticipacion(participacion);
+        avance.setCantidad(cantidad);
+        avance.setRegistradoEn(LocalDateTime.now());
+        avance.setClaveSolicitud(dto.claveSolicitud());
+        avanceRetoRepository.save(avance);
+        participacion.setCantidadAcumulada(total);
+        participacion.setProgreso(total.multiply(BigDecimal.valueOf(100))
+                .divide(reto.getMetaCantidad(), 2, RoundingMode.HALF_UP));
+        return convertirARespuesta(usuarioRetoRepository.save(participacion));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AvanceRetoRespuestaDTO> listarAvances(Integer usuarioRetoId, Long usuarioId) {
+        usuarioRetoRepository.findByIdAndUsuario_Id(usuarioRetoId, usuarioId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Participación no encontrada"));
+        return avanceRetoRepository
+                .findByParticipacion_IdAndParticipacion_Usuario_IdOrderByRegistradoEnDescIdDesc(usuarioRetoId, usuarioId)
+                .stream().map(a -> new AvanceRetoRespuestaDTO(a.getId(), a.getCantidad(), a.getRegistradoEn()))
+                .toList();
+    }
+
+    @Override
     @Transactional
     public UsuarioRetoRespuestaDTO actualizarProgreso(
             Integer usuarioRetoId, Long usuarioId, ActualizarProgresoDTO dto) {
-        if (dto == null || dto.getProgreso() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "El progreso es obligatorio");
-        }
-        if (dto.getProgreso().compareTo(BigDecimal.ZERO) < 0
-                || dto.getProgreso().compareTo(BigDecimal.valueOf(100)) > 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "El progreso debe estar entre 0 y 100");
-        }
-
-        usuarioRetoRepository.bloquearParticipacion(usuarioRetoId, usuarioId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Participación no encontrada"));
-        UsuarioReto usuarioReto = usuarioRetoRepository
-                .findByIdAndUsuario_Id(usuarioRetoId, usuarioId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Participación no encontrada"));
-
-        if (usuarioReto.getReto() != null && usuarioReto.getReto().getTipo() == TipoReto.COLECTIVO) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Use la ruta de progreso colectivo");
-        }
-
-        if (!"activo".equalsIgnoreCase(usuarioReto.getEstado())
-                || usuarioReto.getFechaCompletado() != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "La participación no está activa");
-        }
-
-        usuarioReto.setProgreso(dto.getProgreso());
-        return convertirARespuesta(usuarioRetoRepository.save(usuarioReto));
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "El progreso se registra como cantidades mediante POST /retos-activos/{id}/avances");
     }
 
     @Override
@@ -219,7 +267,10 @@ public class RetoServiceImpl implements RetoService {
         }
 
         if (usuarioReto.getProgreso() == null
-                || usuarioReto.getProgreso().compareTo(BigDecimal.valueOf(100)) != 0) {
+                || usuarioReto.getProgreso().compareTo(BigDecimal.valueOf(100)) != 0
+                || usuarioReto.getReto() == null || usuarioReto.getReto().getMetaCantidad() == null
+                || usuarioReto.getCantidadAcumulada() == null
+                || usuarioReto.getCantidadAcumulada().compareTo(usuarioReto.getReto().getMetaCantidad()) < 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "El progreso debe ser 100 para completar el reto");
         }
@@ -261,7 +312,7 @@ public class RetoServiceImpl implements RetoService {
     }
 
     private UsuarioRetoRespuestaDTO convertirARespuesta(UsuarioReto usuarioReto) {
-        return new UsuarioRetoRespuestaDTO(
+        UsuarioRetoRespuestaDTO respuesta = new UsuarioRetoRespuestaDTO(
                 usuarioReto.getId(),
                 usuarioReto.getUsuario().getId(),
                 usuarioReto.getReto().getId(),
@@ -270,6 +321,10 @@ public class RetoServiceImpl implements RetoService {
                 usuarioReto.getFechaAceptacion(),
                 usuarioReto.getFechaCompletado()
         );
+        respuesta.setCantidadAcumulada(usuarioReto.getCantidadAcumulada() == null
+                ? BigDecimal.ZERO : usuarioReto.getCantidadAcumulada());
+        respuesta.setReto(convertirADTO(usuarioReto.getReto()));
+        return respuesta;
     }
 
     private RetoRespuestaDTO convertirADTO(Reto reto) {
@@ -286,6 +341,8 @@ public class RetoServiceImpl implements RetoService {
                 reto.getCategoria() != null ? reto.getCategoria().getNombre() : null
         );
         dto.setClasificacion(clasificacion(reto));
+        dto.setMetaCantidad(reto.getMetaCantidad());
+        dto.setUnidadMedida(reto.getUnidadMedida());
         return dto;
     }
 }

@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.List;
 
 @Entity
@@ -22,6 +23,10 @@ public class Reto {
     private String titulo;
     private String descripcion;
     private Integer puntosRecompensa;
+    @Column(name = "meta_cantidad", precision = 12, scale = 3)
+    private BigDecimal metaCantidad = BigDecimal.valueOf(100);
+    @Column(name = "unidad_medida", length = 60)
+    private String unidadMedida = "puntos porcentuales";
     private String dificultad;
     private LocalDate fechaInicio;
     private LocalDate fechaFin;
